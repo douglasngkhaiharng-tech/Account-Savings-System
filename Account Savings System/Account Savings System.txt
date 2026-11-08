@@ -1,0 +1,2823 @@
+import json
+import os
+import math
+import tkinter as tk
+from tkinter import ttk,messagebox,scrolledtext,simpledialog
+from datetime import datetime, timedelta
+from typing import List, Dict, Optional
+
+#create file json of system(if not create already)
+command_file = "Command Saving.json"
+if not os.path.exists(command_file):
+    with open(command_file,"a",encoding="utf-8") as f:
+        json.dump({},f,indent=4)
+
+saving = [] # using list for save monthly income context
+
+m1 = "January"
+m2 = "February"
+m3 = "March"
+m4 = "April"
+m5 = "May"
+m6 = "June"
+m7 = "July"
+m8 = "August"
+m9 = "September"
+m10 = "October"
+m11 = "November"
+m12 = "December"
+
+i = 0
+Year = 2025
+#Save 12 month
+Monthly = (m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12)
+
+#LaLa
+class ExpenseTracker:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Expense Recorder")
+        self.root.geometry("900x600")
+
+        self.filename = "expenses.json"
+        self.init_json()
+
+        self.setup_treeview_style()
+
+        self.create_widgets()
+
+    def init_json(self):
+        if not os.path.exists(self.filename):
+            with open(self.filename, "w", encoding="utf-8") as f:
+                json.dump([], f, ensure_ascii=False, indent=4)
+        else:
+            try:
+                with open(self.filename, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if not isinstance(data, list):
+                        with open(self.filename, "w", encoding="utf-8") as f:
+                            json.dump([], f, ensure_ascii=False, indent=4)
+            except json.JSONDecodeError:
+                with open(self.filename, "w", encoding="utf-8") as f:
+                    json.dump([], f, ensure_ascii=False, indent=4)
+
+    def setup_treeview_style(self):
+        style = ttk.Style(self.root)
+        style.theme_use("default")
+
+        style.configure("Treeview.Heading",
+                        background="#4F81BD",
+                        foreground="white",
+                        font=("Arial", 10, "bold"))
+        style.map("Treeview.Heading",
+                  background=[("active", "#3A5F8B")])
+
+        style.configure("Treeview",
+                        background="#FFFFFF",
+                        foreground="black",
+                        rowheight=25,
+                        font=("Arial", 9))
+        style.map("Treeview",
+                  background=[("selected", "#C6E2FF")],
+                  foreground=[("selected", "black")])
+
+    def create_widgets(self):
+
+        input_frame = ttk.LabelFrame(self.root, text="Enter Expense Information")
+        input_frame.pack(padx=10, pady=10, fill="x")
+
+        ttk.Label(input_frame, text="Date (Format: YYYY-MM-DD)：").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.date_var = tk.StringVar()
+
+        self.date_combobox = ttk.Combobox(input_frame, textvariable=self.date_var, state="normal")
+        self.date_combobox["values"] = ("Today",)  # 初始值为Today
+        self.date_combobox.grid(row=0, column=1, padx=5, pady=5, sticky="we")
+
+        self.date_combobox.bind("<<ComboboxSelected>>", self.on_date_select)
+
+        self.date_combobox.current(0)
+
+        self.on_date_select(None)
+
+        ttk.Label(input_frame, text="Category：").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        self.category_var = tk.StringVar()
+        self.category_combobox = ttk.Combobox(input_frame, textvariable=self.category_var, state="readonly")
+        self.category_combobox["values"] = ("Food", "Transport", "Shopping", "Entertainment", "Housing", "Medical", "Others")
+        self.category_combobox.grid(row=1, column=1, padx=5, pady=5, sticky="we")
+        self.category_combobox.current(0)
+
+        ttk.Label(input_frame, text="Amount (RM)：").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        self.amount_entry = ttk.Entry(input_frame)
+        self.amount_entry.grid(row=2, column=1, padx=5, pady=5, sticky="we")
+
+        ttk.Label(input_frame, text="Note：").grid(row=3, column=0, padx=5, pady=5, sticky="w")
+        self.note_entry = ttk.Entry(input_frame)
+        self.note_entry.grid(row=3, column=1, padx=5, pady=5, sticky="we")
+
+        func_frame = ttk.Frame(self.root)
+        func_frame.pack(padx=10, pady=5, fill="x")
+
+        button_frame = ttk.Frame(func_frame)
+        button_frame.pack(side="left", padx=0, pady=5)
+
+        ttk.Button(button_frame, text="Add Expense", command=self.add_expense).grid(row=0, column=0, padx=5, pady=5)
+        ttk.Button(button_frame, text="View All Expenses", command=self.view_expenses).grid(row=0, column=1, padx=5, pady=5)
+        ttk.Button(button_frame, text="Clear Input", command=self.clear_entries).grid(row=0, column=2, padx=5, pady=5)
+        ttk.Button(button_frame, text="Clear Expenses Record", command=self.clear_expenses, style="Accent.TButton").grid(row=0, column=3, padx=5, pady=5)
+
+        search_frame = ttk.Frame(func_frame)
+        search_frame.pack(side="right", padx=0, pady=5)
+
+        ttk.Label(search_frame, text="Search：").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.search_entry = ttk.Entry(search_frame, width=30)
+        self.search_entry.grid(row=0, column=1, padx=5, pady=5, sticky="we")
+        ttk.Button(search_frame, text="Search Expenses", command=self.search_expenses).grid(row=0, column=2, padx=5, pady=5)
+
+        self.total_label = ttk.Label(self.root, text="Total Expense：0.00 RM", font=("Arial", 10, "bold"))
+        self.total_label.pack(padx=10, pady=0, anchor="e")
+
+        self.tree = ttk.Treeview(self.root, columns=("date", "category", "amount", "note"), show="headings")
+        self.tree.heading("date", text="Date")
+        self.tree.heading("category", text="Category")
+        self.tree.heading("amount", text="Amount (RM)")
+        self.tree.heading("note", text="Note")
+        self.tree.column("date", width=120, anchor="center")
+        self.tree.column("category", width=100, anchor="center")
+        self.tree.column("amount", width=120, anchor="center")
+        self.tree.column("note", width=200, anchor="w")
+
+        scrollbar_y = ttk.Scrollbar(self.root, orient="vertical", command=self.tree.yview)
+        scrollbar_x = ttk.Scrollbar(self.root, orient="horizontal", command=self.tree.xview)
+        self.tree.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
+
+        self.tree.pack(padx=10, pady=10, fill="both", expand=True)
+        scrollbar_y.pack(side="right", fill="y")
+        scrollbar_x.pack(side="bottom", fill="x")
+
+        input_frame.columnconfigure(1, weight=1)
+        search_frame.columnconfigure(1, weight=1)
+
+
+    def on_date_select(self, event):
+        selected = self.date_var.get()
+        if selected == "Today":
+            self.date_combobox.delete(0, tk.END)
+            today_date = datetime.now().strftime("%Y-%m-%d")
+            self.date_combobox.insert(0, today_date)
+            self.date_combobox["values"] = ("Today", today_date)
+
+    def add_expense(self):
+        date = self.date_combobox.get().strip()
+        category = self.category_var.get()
+        amount = self.amount_entry.get().strip()
+        note = self.note_entry.get().strip()
+
+        if not date:
+            messagebox.showerror("Error", "Date cannot be empty!")
+            return
+        if not amount:
+            messagebox.showerror("Error", "Amount cannot be empty!")
+            return
+        try:
+            amount_float = float(amount)
+            if amount_float <= 0:
+                raise ValueError
+        except ValueError:
+            messagebox.showerror("Error", "Amount must be a positive number!")
+            return
+        try:
+            datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            messagebox.showerror("Error", "Invalid date format! Please use YYYY-MM-DD.")
+            return
+
+        expense = {
+            "Date": date,
+            "Category": category,
+            "Amount": amount_float,
+            "Note": note
+        }
+
+        try:
+            with open(self.filename, "r", encoding="utf-8") as f:
+                expenses = json.load(f)
+            expenses.append(expense)
+            with open(self.filename, "w", encoding="utf-8") as f:
+                json.dump(expenses, f, ensure_ascii=False, indent=4)
+            messagebox.showinfo("Success", "Expense added successfully!")
+            self.clear_entries()
+            self.view_expenses()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to add expense: {str(e)}")
+
+    def view_expenses(self):
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        try:
+            with open(self.filename, "r", encoding="utf-8") as f:
+                expenses = json.load(f)
+
+            if not expenses:
+                self.total_label.config(text="Total Expense：0.00 RM")
+                return
+
+            total = 0.0
+            for idx, expense in enumerate(expenses):
+                date = expense["Date"]
+                category = expense["Category"]
+                amount = expense["Amount"]
+                note = expense["Note"]
+                total += amount
+                self.tree.insert("", "end", values=(date, category, f"{amount:.2f}", note))
+                if idx % 2 == 1:
+                    self.tree.item(self.tree.get_children()[-1], tags=("oddrow",))
+
+            self.tree.tag_configure("oddrow", background="#F2F2F2")
+            self.total_label.config(text=f"Total Expense：{total:.2f} RM")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to read expenses: {str(e)}")
+
+    def clear_entries(self):
+        self.date_combobox["values"] = ("Today",)
+        self.date_combobox.current(0)
+        self.on_date_select(None)
+        self.category_combobox.current(0)
+        self.amount_entry.delete(0, tk.END)
+        self.note_entry.delete(0, tk.END)
+        self.search_entry.delete(0, tk.END)
+
+    def clear_expenses(self):
+        confirm = messagebox.askyesno("Confirm", "Are you sure to clear all expense records? This action cannot be undone!")
+        if confirm:
+            try:
+                with open(self.filename, "w", encoding="utf-8") as f:
+                    json.dump([], f, ensure_ascii=False, indent=4)
+                messagebox.showinfo("Success", "All expense records cleared successfully!")
+                self.view_expenses()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to clear expenses: {str(e)}")
+
+    def search_expenses(self):
+        search_text = self.search_entry.get().strip().lower()
+        if not search_text:
+            self.view_expenses()
+            return
+
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        try:
+            with open(self.filename, "r", encoding="utf-8") as f:
+                expenses = json.load(f)
+
+            matched_expenses = []
+            total = 0.0
+            for expense in expenses:
+                date = expense["Date"].lower()
+                category = expense["Category"].lower()
+                note = expense["Note"].lower()
+                amount = str(expense["Amount"]).lower()
+                if search_text in date or search_text in category or search_text in note or search_text in amount:
+                    matched_expenses.append(expense)
+                    total += expense["Amount"]
+
+            if not matched_expenses:
+                self.total_label.config(text="Total Expense (Matched)：0.00 RM")
+                messagebox.showinfo("Info", "No matching expenses found!")
+                return
+
+            for idx, expense in enumerate(matched_expenses):
+                date = expense["Date"]
+                category = expense["Category"]
+                amount = expense["Amount"]
+                note = expense["Note"]
+                self.tree.insert("", "end", values=(date, category, f"{amount:.2f}", note))
+                if idx % 2 == 1:
+                    self.tree.item(self.tree.get_children()[-1], tags=("oddrow",))
+
+            self.tree.tag_configure("oddrow", background="#F2F2F2")
+            self.total_label.config(text=f"Total Expense (Matched)：{total:.2f} RM")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to search expenses: {str(e)}")
+
+#Course Rep
+class FinanceEntity:
+    #Base class for all financial entities
+    def __init__(self, name, amount):
+        self._name = name  #Encapsulation: protected attribute
+        self._amount = amount
+
+    @property
+    def name(self):
+        #Get name
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        #Set name with validation
+        if isinstance(value, str) and value.strip():
+            self._name = value.strip()
+        else:
+            raise ValueError("Name must be a non-empty string")
+
+    @property
+    def amount(self):
+        #Get amount
+        return self._amount
+
+    @amount.setter
+    def amount(self, value):
+        #Set amount with validation
+        if isinstance(value, (int, float)) and value >= 0:
+            self._amount = value
+        else:
+            raise ValueError("Amount must be a non-negative number")
+
+
+class BudgetCategory(FinanceEntity):
+    #Child class for budget categories (Inheritance)
+    def __init__(self, name, budget_amount):
+        super().__init__(name, budget_amount)
+        self.actual_expenses = 0  #Track actual spending
+        self.transactions = []  #List to store transactions
+
+    def add_expense(self, amount, description=""):
+        #Add expense to this category
+        if amount < 0:
+            raise ValueError("Expense amount cannot be negative")
+        self.actual_expenses += amount
+        self.transactions.append({
+            'date':datetime.now().isoformat(),  #Save as string
+            'amount': amount,
+            'description': description
+        })
+        return self.actual_expenses
+
+    def get_variance(self):
+        #Calculate budget variance
+        return self.amount - self.actual_expenses
+
+    def get_utilization_percentage(self):
+        #Calculate percentage of budget used
+        if self.amount == 0:
+            return 0
+        return (self.actual_expenses / self.amount) * 100
+
+    def to_dict(self):
+        #Convert category to dictionary for JSON serialization
+        return {
+            'name': self.name,
+            'budget': self.amount,
+            'actual': self.actual_expenses,
+            'transactions': self.transactions
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        #Create category from dictionary
+        category = cls(data['name'], data['budget'])
+        category.actual_expenses = data.get('actual', 0)
+        category.transactions = data.get('transactions', [])
+        return category
+
+
+#STRING PROCESSING FUNCTIONS
+def format_currency(amount):
+    #Format amount as currency string (String Processing)
+    return f"RM{amount:,.2f}"
+
+
+def format_percentage(value):
+    #Format value as percentage string (String Processing)
+    return f"{value:.1f}%"
+
+
+def parse_currency_input(input_str):
+    #Parse currency input from string (String Processing)
+    #Remove currency symbols and commas
+    cleaned = input_str.replace('RM', '').replace(',', '').strip()
+    try:
+        return float(cleaned)
+    except ValueError:
+        raise ValueError("Invalid currency format")
+
+
+#FILE PROCESSING CLASS
+class DataManager:
+    #Handles file operations for saving/loading budget data (File Processing)
+
+    DEFAULT_FILENAME = "budget_data.json"
+
+    @staticmethod
+    def save_to_json(data, filename=DEFAULT_FILENAME):
+        #Save data to JSON file (File Processing)
+        try:
+            with open(filename, 'w') as f:
+                json.dump(data, f, indent=2)
+            return True
+        except Exception as e:
+            print(f"Failed to save file: {str(e)}")
+            return False
+
+    @staticmethod
+    def load_from_json(filename=DEFAULT_FILENAME):
+        #Load data from JSON file (File Processing)
+        try:
+            if os.path.exists(filename):
+                with open(filename, 'r') as f:
+                    data = json.load(f)
+                return data
+            else:
+                return []
+        except Exception as e:
+            print(f"Failed to load file: {str(e)}")
+            return []
+
+
+#COLLECTIONS MANAGEMENT
+class BudgetManager:
+    #Manages collections of budget categories and transactions (Collections)
+
+    def __init__(self):
+        self.categories = {}  #Dictionary for categories (Collections: Dictionary)
+        self.transaction_history = []  #List for transaction history (Collections: List)
+        self.category_set = set()  #Set for unique category names (Collections: Set)
+
+    def add_category(self, name, budget_amount):
+        if name in self.categories:
+            self.categories[name].amount += budget_amount
+            return self.categories[name]
+
+        category = BudgetCategory(name, budget_amount)
+        self.categories[name] = category
+        self.category_set.add(name)
+        return category
+
+    def add_transaction(self, category_name, amount, description=""):
+        #Add a transaction to a category
+        if category_name not in self.categories:
+            raise ValueError(f"Category '{category_name}' not found")
+
+        category = self.categories[category_name]
+        transaction = category.add_expense(amount, description)
+
+        #Record in transaction history
+        self.transaction_history.append({
+            'date': datetime.now().isoformat(),
+            'category': category_name,
+            'amount': amount,
+            'description': description
+        })
+
+        return transaction
+
+    def get_summary(self):
+        #Get summary of all categories (Collections Operations)
+        total_budget = sum(cat.amount for cat in self.categories.values())
+        total_actual = sum(cat.actual_expenses for cat in self.categories.values())
+        total_variance = total_budget - total_actual
+
+        #Create summary list
+        summary = []
+        for name, category in self.categories.items():
+            summary.append({
+                'name': name,
+                'budget': category.amount,
+                'actual': category.actual_expenses,
+                'variance': category.get_variance(),
+                'utilization': category.get_utilization_percentage()
+            })
+
+        return {
+            'total_budget': total_budget,
+            'total_actual': total_actual,
+            'total_variance': total_variance,
+            'categories': summary
+        }
+
+    def get_category_names(self):
+        #Get list of category names (Collections: List from Set)
+        return list(self.category_set)
+
+    def save_data(self):
+        #Save all data to JSON format
+        data = {
+            'categories': [cat.to_dict() for cat in self.categories.values()],
+            'transactions': self.transaction_history
+        }
+        return data
+
+    def load_data(self, data):
+        #Load data from dictionary
+        self.categories.clear()
+        self.category_set.clear()
+        self.transaction_history.clear()
+
+        for cat_data in data.get('categories', []):
+            category = BudgetCategory.from_dict(cat_data)
+            self.categories[category.name] = category
+            self.category_set.add(category.name)
+
+        self.transaction_history = data.get('transactions', [])
+
+
+#EXCEPTION HANDLING DECORATOR
+def handle_exceptions(func):
+    #Decorator for exception handling (Exception Handling)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except ValueError as e:
+            messagebox.showerror("Input Error", str(e))
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {str(e)}")
+    return wrapper
+
+
+#GUI
+class BudgetPlannerApp:
+    #Main GUI
+
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Personal Finance Assistant - Budget Planner")
+        self.root.geometry("900x600")
+
+        #Initialize data manager
+        self.data_manager = DataManager()
+        self.budget_manager = BudgetManager()
+
+        #styles
+        self.setup_styles()
+
+        # Create GUI
+        self.create_widgets()
+
+        # Load data from JSON file
+        self.load_data()
+
+        # Center the window
+        self.center_window()
+
+        #auto-save on exit
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def setup_styles(self):
+        #Setup ttk styles for GUI)
+        style = ttk.Style()
+
+        #colors
+        self.root.configure(bg='#f0f0f0')
+
+        #button
+        style.configure('Primary.TButton', padding=10, font=('Times New Roman', 10, 'bold'))
+        style.configure('Danger.TButton', background="#FF0019", foreground='white')
+
+    def center_window(self):
+        #Center the window
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        self.root.geometry(f'{width}x{height}+{x}+{y}')
+
+    def create_widgets(self):
+        #GUI widgets
+        main_container = ttk.Frame(self.root, padding="10")
+        main_container.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+
+        #grid weights
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)
+        main_container.columnconfigure(0, weight=1)
+        main_container.rowconfigure(0, weight=1)
+
+        #Create notebook
+        self.notebook = ttk.Notebook(main_container)
+        self.notebook.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+
+        #Create tabs
+        self.create_budget_tab()
+        self.create_expenses_tab()
+        self.create_reports_tab()
+
+        #Create status bar
+        self.create_status_bar(main_container)
+
+        #Create menu bar
+        self.create_menu_bar()
+
+        exit_frame = ttk.Frame(self.root, padding=10)
+        exit_frame.grid(row=1, column=0, sticky=(tk.W, tk.E))
+
+    def create_menu_bar(self):
+        #menu bar
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+
+        #File menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Save Budget", command=self.save_data)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.on_closing)
+
+        #Edit menu
+        edit_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Edit", menu=edit_menu)
+        edit_menu.add_command(label="Clear All Data", command=self.clear_all_data)
+
+        #Help menu
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="User Manual", command=self.show_user_manual)
+
+    def create_status_bar(self, parent):
+        #Create status bar at bottom
+        status_frame = ttk.Frame(parent)
+        status_frame.grid(row=1, column=0, sticky=(tk.W, tk.E))
+
+        self.status_label = ttk.Label(
+            status_frame,
+            text="Ready",
+            relief=tk.SUNKEN,
+            anchor=tk.W,
+            padding=(5, 2)
+        )
+        self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        #Update status periodically
+        self.update_status()
+
+    def update_status(self):
+        #Update status bar with current information
+        summary = self.budget_manager.get_summary()
+        status_text = f"Total Budget: {format_currency(summary['total_budget'])} | "
+        status_text += f"Total Spent: {format_currency(summary['total_actual'])} | "
+        status_text += f"Remaining: {format_currency(summary['total_variance'])}"
+
+        self.status_label.config(text=status_text)
+
+        #Schedule next update
+        self.root.after(5000, self.update_status)
+
+    def create_budget_tab(self):
+        """Create Budget Setup tab"""
+        budget_frame = ttk.Frame(self.notebook, padding="10")
+        self.notebook.add(budget_frame, text="Budget Setup")
+
+        #Title
+        title_label = ttk.Label(
+            budget_frame,
+            text="Monthly Budget Planner",
+            font=('Arial', 16, 'bold')
+        )
+        title_label.grid(row=0, column=0, columnspan=3, pady=(0, 20))
+
+        #Input frame
+        input_frame = ttk.LabelFrame(budget_frame, text="Add Budget Category", padding="10")
+        input_frame.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 20))
+
+        #Category name
+        ttk.Label(input_frame, text="Category Name:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
+        self.category_name_var = tk.StringVar()
+        ttk.Entry(input_frame, textvariable=self.category_name_var, width=30).grid(row=0, column=1, padx=(0, 10))
+
+        #Budget amount
+        ttk.Label(input_frame, text="Budget Amount (RM):").grid(row=0, column=2, sticky=tk.W, padx=(0, 5))
+        self.budget_amount_var = tk.StringVar()
+        ttk.Entry(input_frame, textvariable=self.budget_amount_var, width=15).grid(row=0, column=3, padx=(0, 10))
+
+        #Add button
+        ttk.Button(
+            input_frame,
+            text="Add Category",
+            command=self.add_category,
+            style='Primary.TButton'
+        ).grid(row=0, column=4)
+
+        #Budget categories treeview
+        tree_frame = ttk.Frame(budget_frame)
+        tree_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+
+        #Configure grid weights for tree_frame
+        tree_frame.columnconfigure(0, weight=1)
+        tree_frame.rowconfigure(0, weight=1)
+
+        #Create treeview with scrollbar
+        columns = ('Category', 'Budget', 'Actual', 'Variance', 'Utilization')
+        self.budget_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=8)
+
+        #Define headings
+        for col in columns:
+            self.budget_tree.heading(col, text=col)
+            self.budget_tree.column(col, width=120, anchor=tk.CENTER)
+
+        #Add scrollbar
+        scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.budget_tree.yview)
+        self.budget_tree.configure(yscrollcommand=scrollbar.set)
+
+        #Grid treeview and scrollbar
+        self.budget_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+
+        #Action buttons
+        button_frame = ttk.Frame(budget_frame)
+        button_frame.grid(row=3, column=0, columnspan=3, pady=(10, 0))
+
+        style = ttk.Style()
+        style.theme_use("clam")
+
+        style.configure(
+            "Danger.TButton",
+            background="red",
+            foreground="white",
+            font=("Times New Roman", 14, "bold"),
+            padding=6
+        )
+
+        style.map(
+            "Danger.TButton",
+            background=[("active", "#b30000")]
+        )
+
+        ttk.Button(button_frame,text="Remove Selected",command=self.remove_category,style='Danger.TButton').pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(
+            button_frame,
+            text="Clear All",
+            command=self.clear_categories
+        ).pack(side=tk.LEFT, padx=5)
+
+    @handle_exceptions
+    def remove_expense(self):
+        """Remove selected expense from treeview and data"""
+        selection = self.expense_tree.selection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select an expense to remove")
+            return
+
+        if not messagebox.askyesno("Confirm", "Are you sure you want to remove the selected expense(s)?"):
+            return
+
+        for item in selection:
+            values = self.expense_tree.item(item, 'values')
+            date_str, category_name, amount_str, description = values
+
+            amount = parse_currency_input(amount_str)
+
+            # Remove from category transactions
+            if category_name in self.budget_manager.categories:
+                category = self.budget_manager.categories[category_name]
+                category.actual_expenses -= amount
+                category.transactions = [
+                    t for t in category.transactions
+                    if not (t['amount'] == amount and t.get('description', '') == description)
+                ]
+
+            # Remove from overall transaction history
+            self.budget_manager.transaction_history = [
+                t for t in self.budget_manager.transaction_history
+                if not (t['amount'] == amount and t['category'] == category_name and t.get('description',
+                                                                                           '') == description)
+            ]
+
+        self.update_expense_display()
+        self.refresh_budget_display()
+        self.update_reports()
+
+        self.save_data()
+        messagebox.showinfo("Success", "Selected expense(s) removed")
+
+
+    def create_expenses_tab(self):
+        #Create Expenses Tracking tab
+        expenses_frame = ttk.Frame(self.notebook, padding="10")
+        self.notebook.add(expenses_frame, text="Expenses Tracking")
+
+        #Title
+        ttk.Label(
+            expenses_frame,
+            text="Track Your Expenses",
+            font=('Arial', 16, 'bold')
+        ).grid(row=0, column=0, columnspan=3, pady=(0, 20))
+
+        ttk.Button(
+            expenses_frame,
+            text="Remove Selected Expense",
+            command=self.remove_expense,
+            style='Danger.TButton'
+        ).grid(row=3, column=0, pady=10)
+
+        #Expense input frame
+        input_frame = ttk.LabelFrame(expenses_frame, text="Add New Expense", padding="10")
+        input_frame.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 20))
+
+        #Category selection
+        ttk.Label(input_frame, text="Category:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
+        self.expense_category_var = tk.StringVar()
+        self.category_combo = ttk.Combobox(
+            input_frame,
+            textvariable=self.expense_category_var,
+            width=30,
+            state='readonly'
+        )
+        self.category_combo.grid(row=0, column=1, padx=(0, 10))
+
+        #Amount
+        ttk.Label(input_frame, text="Amount (RM):").grid(row=0, column=2, sticky=tk.W, padx=(0, 5))
+        self.expense_amount_var = tk.StringVar()
+        ttk.Entry(input_frame, textvariable=self.expense_amount_var, width=15).grid(row=0, column=3, padx=(0, 10))
+
+        #Description
+        ttk.Label(input_frame, text="Description:").grid(row=1, column=0, sticky=tk.W, padx=(0, 5), pady=(10, 0))
+        self.expense_desc_var = tk.StringVar()
+        ttk.Entry(input_frame, textvariable=self.expense_desc_var, width=30).grid(row=1, column=1, columnspan=3, sticky=tk.W, padx=(0, 10), pady=(10, 0))
+
+        #Add button
+        ttk.Button(
+            input_frame,
+            text="Add Expense",
+            command=self.add_expense,
+            style='Primary.TButton'
+        ).grid(row=1, column=4, pady=(10, 0))
+
+        #Transactions treeview
+        tree_frame = ttk.Frame(expenses_frame)
+        tree_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+
+        tree_frame.columnconfigure(0, weight=1)
+        tree_frame.rowconfigure(0, weight=1)
+
+        #Create treeview
+        columns = ('Date', 'Category', 'Amount', 'Description')
+        self.expense_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=8)
+
+        for col in columns:
+            self.expense_tree.heading(col, text=col)
+            self.expense_tree.column(col, width=120)
+
+        #Add scrollbar
+        scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.expense_tree.yview)
+        self.expense_tree.configure(yscrollcommand=scrollbar.set)
+
+        self.expense_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+
+        #Update category combo
+        self.update_category_combo()
+
+    def create_reports_tab(self):
+        #Create Reports tab
+        reports_frame = ttk.Frame(self.notebook, padding="10")
+        self.notebook.add(reports_frame, text="Reports")
+
+        #Title
+        ttk.Label(
+            reports_frame,
+            text="Budget Reports",
+            font=('Times New Roman', 16, 'bold')
+        ).pack(pady=(0, 20))
+
+        #Summary
+        summary_frame = ttk.LabelFrame(reports_frame, text="Budget Summary", padding="15")
+        summary_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
+
+        #Create labels summary
+        self.total_budget_label = ttk.Label(summary_frame, text="Total Budget: RM0.00", font=('Times New Roman', 12))
+        self.total_budget_label.grid(row=0, column=0, sticky=tk.W, pady=5)
+
+        self.total_spent_label = ttk.Label(summary_frame, text="Total Spent: RM0.00", font=('Times New Roman', 12))
+        self.total_spent_label.grid(row=1, column=0, sticky=tk.W, pady=5)
+
+        self.total_remaining_label = ttk.Label(summary_frame, text="Remaining: RM0.00", font=('Times New Roman', 12))
+        self.total_remaining_label.grid(row=2, column=0, sticky=tk.W, pady=5)
+
+        #Variance
+        variance_frame = ttk.LabelFrame(reports_frame, text="Variance Analysis", padding="15")
+        variance_frame.pack(fill=tk.BOTH, expand=True)
+
+        #text widget variance
+        self.variance_text = tk.Text(variance_frame, height=12, width=50)
+        self.variance_text.pack(fill=tk.BOTH, expand=True)
+
+        #scrollbar
+        scrollbar = ttk.Scrollbar(variance_frame, orient=tk.VERTICAL, command=self.variance_text.yview)
+        self.variance_text.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        #Update reports
+        self.update_reports()
+
+    #EVENT HANDLERS
+
+    @handle_exceptions
+    def add_category(self):
+        """Add a new budget category"""
+        name = self.category_name_var.get().strip()
+        amount_str = self.budget_amount_var.get().strip()
+
+        #onput validation
+        if not name:
+            raise ValueError("Please enter a category name")
+        if not amount_str:
+            raise ValueError("Please enter a budget amount")
+
+        amount = parse_currency_input(amount_str)
+
+        #Add category using BudgetManager
+        self.budget_manager.add_category(name, amount)
+
+        #Clear input
+        self.category_name_var.set("")
+        self.budget_amount_var.set("")
+
+        #Update displays
+        self.update_category_combo()
+        self.refresh_budget_display()
+        self.update_reports()
+
+        #Auto-save
+        self.save_data()
+
+        messagebox.showinfo(
+            "Success",
+            f"Category '{name}' budget updated by {format_currency(amount)}"
+        )
+
+    @handle_exceptions
+    def add_expense(self):
+        """Add a new expense"""
+        category = self.expense_category_var.get().strip()
+        amount_str = self.expense_amount_var.get().strip()
+        description = self.expense_desc_var.get().strip()
+
+        #input validation
+        if not category:
+            raise ValueError("Please select a category")
+        if not amount_str:
+            raise ValueError("Please enter an amount")
+
+        amount = parse_currency_input(amount_str)
+
+        #Add transaction using BudgetManager
+        self.budget_manager.add_transaction(category, amount, description)
+
+        #Clear input
+        self.expense_amount_var.set("")
+        self.expense_desc_var.set("")
+
+        #Update displays
+        self.refresh_budget_display()
+        self.update_expense_display()
+        self.update_reports()
+
+        #Auto-save
+        self.save_data()
+
+        messagebox.showinfo("Success", f"Expense of {format_currency(amount)} added to '{category}'")
+
+    def remove_category(self):
+        #Remove selected category
+        selection = self.budget_tree.selection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a category to remove")
+            return
+
+        #Confirm remove
+        if not messagebox.askyesno("Confirm", "Are you sure you want to remove this category?"):
+            return
+
+        for item in selection:
+            category_name = self.budget_tree.item(item, 'values')[0]
+            if category_name in self.budget_manager.categories:
+                del self.budget_manager.categories[category_name]
+                self.budget_manager.category_set.remove(category_name)
+
+        self.refresh_budget_display()
+        self.update_category_combo()
+        self.update_reports()
+
+        #Auto-save
+        self.save_data()
+
+    def clear_categories(self):
+        """Clear all categories"""
+        if not messagebox.askyesno("Confirm", "Are you sure you want to clear all categories?"):
+            return
+
+        self.budget_manager.categories.clear()
+        self.budget_manager.category_set.clear()
+        self.budget_manager.transaction_history.clear()
+
+        self.refresh_budget_display()
+        self.update_expense_display()
+        self.update_reports()
+
+        #Auto-save
+        self.save_data()
+
+    def clear_all_data(self):
+        #Clear all data
+        if messagebox.askyesno("Confirm", "Are you sure you want to clear ALL data?"):
+            self.clear_categories()
+            messagebox.showinfo("Info", "All data has been cleared")
+
+    #DATA LOADING/SAVING
+
+    def load_data(self):
+        #Load data from JSON file
+        data = self.data_manager.load_from_json()
+        if data:
+            try:
+                self.budget_manager.load_data(data)
+                #Update displays
+                self.update_category_combo()
+                self.refresh_budget_display()
+                self.update_expense_display()
+                self.update_reports()
+                print("Data loaded successfully from budget_data.json")
+            except Exception as e:
+                print(f"Error loading data: {e}")
+                self.load_sample_data()  #Load sample data if file is corrupted
+        else:
+            #Load sample data if no file exists
+            self.load_sample_data()
+
+    def save_data(self):
+        #Save data to JSON file
+        try:
+            data = self.budget_manager.save_data()
+            if self.data_manager.save_to_json(data):
+                print("Data saved successfully to budget_data.json")
+                return True
+        except Exception as e:
+            print(f"Error saving data: {e}")
+        return False
+
+    def on_closing(self):
+        #Handle window closing event
+        # Auto-save before closing
+        self.save_data()
+        self.root.destroy()
+
+    #DISPLAY UPDATES
+
+    def refresh_budget_display(self):
+        #Refresh the budget treeview display
+        #Clear existing items
+        for item in self.budget_tree.get_children():
+            self.budget_tree.delete(item)
+
+        #Add categories
+        for name, category in self.budget_manager.categories.items():
+            values = (
+                name,
+                format_currency(category.amount),
+                format_currency(category.actual_expenses),
+                format_currency(category.get_variance()),
+                format_percentage(category.get_utilization_percentage())
+            )
+            self.budget_tree.insert('', tk.END, values=values)
+
+    def update_expense_display(self):
+        #Update the expense treeview display
+        #Clear existing items
+        for item in self.expense_tree.get_children():
+            self.expense_tree.delete(item)
+
+        #Add transactions
+        transactions = self.budget_manager.transaction_history
+        i = 0
+        while i < len(transactions):
+            trans = transactions[i]
+            #Convert date string to readable
+            try:
+                date_obj = datetime.fromisoformat(trans['date'])
+                date_str = date_obj.strftime("%Y-%m-%d %H:%M")
+            except:
+                date_str = trans['date']
+
+            values = (
+                date_str,
+                trans['category'],
+                format_currency(trans['amount']),
+                trans.get('description', '')
+            )
+            self.expense_tree.insert('', tk.END, values=values)
+            i += 1
+
+    def update_category_combo(self):
+        #Update the category combobox
+        categories = self.budget_manager.get_category_names()
+        self.category_combo['values'] = categories
+        if categories:
+            self.expense_category_var.set(categories[0])
+
+    def update_reports(self):
+        """Update the reports display"""
+        summary = self.budget_manager.get_summary()
+
+        #Update summary labels
+        self.total_budget_label.config(
+            text=f"Total Budget: {format_currency(summary['total_budget'])}"
+        )
+        self.total_spent_label.config(
+            text=f"Total Spent: {format_currency(summary['total_actual'])}"
+        )
+        self.total_remaining_label.config(
+            text=f"Remaining: {format_currency(summary['total_variance'])}"
+        )
+
+        #Update variance text
+        self.variance_text.delete(1.0, tk.END)
+
+        self.variance_text.insert(tk.END, "Category-wise Variance Analysis:\n")
+        self.variance_text.insert(tk.END, "="*50 + "\n")
+
+        #Using MATCH statement simulation
+        for cat in summary['categories']:
+            variance = cat['variance']
+            utilization = cat['utilization']
+
+            #SELECTION
+            if variance >= 0:
+                status = "UNDER Budget"
+                color_tag = "green"
+            else:
+                status = "OVER Budget"
+                color_tag = "red"
+
+            line = f"{cat['name']}:\n"
+            line += f"  Budget: {format_currency(cat['budget'])}\n"
+            line += f"  Actual: {format_currency(cat['actual'])}\n"
+            line += f"  Variance: {format_currency(variance)} ({status})\n"
+            line += f"  Utilization: {format_percentage(utilization)}\n"
+            line += "-"*30 + "\n"
+
+            self.variance_text.insert(tk.END, line)
+
+    def load_sample_data(self):
+        #Load sample data for demonstration(if no saved data)
+        try:
+            #Only load sample data if no categories exist
+            if not self.budget_manager.categories:
+                sample_categories = [
+                    ("Housing", 1500),
+                    ("Food", 600),
+                    ("Transport", 300),
+                    ("Entertainment", 200),
+                    ("Utilities", 250)
+                ]
+
+                for name, amount in sample_categories:
+                    self.budget_manager.add_category(name, amount)
+
+                #Add some sample expenses
+                sample_expenses = [
+                    ("Housing", 1450, "Rent"),
+                    ("Food", 450, "Groceries"),
+                    ("Transport", 280, "Petrol"),
+                    ("Entertainment", 180, "Movies"),
+                    ("Utilities", 230, "Electricity"),
+                    ("Food", 120, "Restaurant")
+                ]
+
+                for category, amount, desc in sample_expenses:
+                    self.budget_manager.add_transaction(category, amount, desc)
+
+                #Update displays
+                self.update_category_combo()
+                self.refresh_budget_display()
+                self.update_expense_display()
+                self.update_reports()
+
+                #Save sample data
+                self.save_data()
+                print("Sample data loaded and saved")
+
+        except Exception as e:
+            print(f"Error loading sample data: {e}")
+
+    def show_user_manual(self):
+        #Display user manual
+        manual_text = """USER MANUAL - Budget Planner
+
+1. BUDGET SETUP TAB:
+   - Enter category name and budget amount
+   - Click 'Add Category' to create a budget category
+   - View all categories in the table below
+   - Select a category and click 'Remove Selected' to delete it
+   - Click 'Clear All' to remove all categories
+
+2. EXPENSES TRACKING TAB:
+   - Select a category from the dropdown menu
+   - Enter the expense amount and description
+   - Click 'Add Expense' to record the transaction
+   - View all transactions in the table below
+
+3. REPORTS TAB:
+   - View total budget, total spent, and remaining balance
+   - See detailed variance analysis for each category
+   - Check which categories are over or under budget
+
+4. AUTOMATIC DATA SAVING:
+   - All data is automatically saved to 'budget_data.json' file
+   - When you add/remove categories or expenses, data is auto-saved
+   - When you close the application, data is saved
+   - When you reopen the application, data is loaded automatically
+
+5. FILE MENU:
+   - Save Budget: Manually save budget data (auto-save is enabled)
+   - Clear All Data: Remove all categories and expenses
+   - Exit: Close the application (data is auto-saved)"""
+
+        manual_window = tk.Toplevel(self.root)
+        manual_window.title("User Manual")
+        manual_window.geometry("500x500")
+
+        text_widget = tk.Text(manual_window, wrap=tk.WORD, padx=10, pady=10)
+        text_widget.insert(1.0, manual_text)
+        text_widget.config(state=tk.DISABLED)
+
+        scrollbar = ttk.Scrollbar(manual_window, command=text_widget.yview)
+        text_widget.configure(yscrollcommand=scrollbar.set)
+
+        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+#MAIN FUNCTION
+def main():
+    #Main function to run the application
+    try:
+        root = tk.Toplevel()
+        app = BudgetPlannerApp(root)
+    except Exception as e:
+        messagebox.showerror("Fatal Error", f"Application failed to start: {str(e)}")
+#Xiezhi
+# ==========================================
+# PART 1: LOGIC & DATA MANAGEMENT (Inheritance Implemented)
+# ==========================================
+
+class JSONDataManager:
+    """
+    Base class responsible for generic JSON file operations.
+    Inheritance Usage: Parent class for any data tracker that needs JSON persistence.
+    """
+
+    def __init__(self, filename: str):
+        self.filename = filename
+
+    def load_data(self) -> List[Dict]:
+        """Generic load method"""
+        if not os.path.exists(self.filename):
+            return []
+        try:
+            with open(self.filename, 'r', encoding='utf-8') as file:
+                return json.load(file)
+        except (json.JSONDecodeError, IOError):
+            return []
+
+    def save_data(self, data: List[Dict]):
+        """Generic save method with atomic write (temp file)"""
+        try:
+            temp_file = f"{self.filename}.tmp"
+            with open(temp_file, 'w', encoding='utf-8') as file:
+                json.dump(data, file, indent=4, ensure_ascii=False)
+
+            if os.path.exists(self.filename):
+                os.replace(temp_file, self.filename)
+            else:
+                os.rename(temp_file, self.filename)
+        except IOError as e:
+            messagebox.showerror("Error", f"Failed to save data: {e}")
+
+
+class AdvancedSavingsGoalTracker(JSONDataManager):
+    """
+    Child class responsible for specific Savings Goal logic.
+    Inherits storage capabilities from JSONDataManager.
+    """
+
+    def __init__(self, data_file="savings_goals_v2.json"):
+        # Initialize the parent class
+        super().__init__(data_file)
+        # Load specific data using parent method
+        self.goals = self.load_data()
+        self._ensure_data_integrity()
+
+    def save_goals(self):
+        """Wrapper to save specific goals data using parent method"""
+        self.save_data(self.goals)
+
+    def _ensure_data_integrity(self):
+        """Ensure data integrity and fix potential data issues"""
+        for goal in self.goals:
+            goal.setdefault('completed', False)
+            goal.setdefault('current_savings', 0.0)
+            goal.setdefault('monthly_contribution', 0.0)
+
+            # Automatically mark completed goals
+            if goal['current_savings'] >= goal['target_amount'] and not goal['completed']:
+                goal['completed'] = True
+                goal['completed_date'] = datetime.now().strftime("%Y-%m-%d")
+
+        self.save_goals()
+
+    # --- Validation Helpers ---
+    def validate_amount(self, amount_str: str, allow_zero: bool = False):
+        try:
+            amount = float(amount_str)
+        except ValueError:
+            raise ValueError("Please enter a valid number.")
+
+        if amount < 0:
+            raise ValueError("Amount cannot be negative.")
+        if not allow_zero and amount == 0:
+            raise ValueError("Amount must be greater than 0.")
+        if round(amount, 2) != amount:
+            raise ValueError("Amount can have maximum 2 decimal places.")
+        return round(amount, 2)
+
+    def validate_date(self, date_str: str):
+        if not date_str.strip():
+            return None
+        try:
+            input_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            today = datetime.now().date()
+            if input_date <= today:
+                raise ValueError("Target date must be in the future.")
+            max_date = today + timedelta(days=50 * 365)
+            if input_date > max_date:
+                raise ValueError("Target date cannot exceed 50 years.")
+            return date_str
+        except ValueError as e:
+            if "format" in str(e):
+                raise ValueError("Invalid date format. Use YYYY-MM-DD.")
+            raise e
+
+    def calculate_estimated_completion(self, goal) -> str:
+        if goal['completed']:
+            return "Completed"
+
+        remaining = goal['target_amount'] - goal['current_savings']
+        if goal['monthly_contribution'] <= 0:
+            return "Unknown (No monthly contribution)"
+
+        months_needed = math.ceil(remaining / goal['monthly_contribution'])
+        est_date = datetime.now() + timedelta(days=months_needed * 30)
+        est_str = est_date.strftime('%Y-%m-%d')
+
+        if goal['target_date']:
+            target_date = datetime.strptime(goal['target_date'], "%Y-%m-%d").date()
+            if est_date.date() > target_date:
+                return f"{est_str} ⚠️ Overdue"
+        return est_str
+
+    def get_days_remaining(self, target_date_str):
+        if not target_date_str: return None
+        target = datetime.strptime(target_date_str, "%Y-%m-%d").date()
+        return (target - datetime.now().date()).days
+
+
+# ==========================================
+# PART 2: GUI APPLICATION (Inheritance Implemented)
+# ==========================================
+
+class SavingsTrackerApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("💰 Advanced Savings Goal Tracker")
+        self.root.geometry("900x600")
+
+        # Initialize Logic
+        self.tracker = AdvancedSavingsGoalTracker()
+
+        # Setup Theme/Design
+        self.setup_styles()
+        self.create_widgets()
+        self.refresh_goal_list()
+
+    def setup_styles(self):
+        style = ttk.Style()
+        style.theme_use('clam')
+        style.configure("Treeview", rowheight=30, font=('Segoe UI', 10))
+        style.configure("Treeview.Heading", font=('Segoe UI', 11, 'bold'))
+        style.configure("TButton", font=('Segoe UI', 10), padding=6)
+        style.configure("TLabel", font=('Segoe UI', 10))
+        style.configure("Header.TLabel", font=('Segoe UI', 18, 'bold'), foreground="#2c3e50")
+        self.root.option_add('*TCombobox*Listbox.font', ('Segoe UI', 10))
+
+    def create_widgets(self):
+        # --- Main Container ---
+        main_frame = ttk.Frame(self.root, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # --- Header ---
+        header_frame = ttk.Frame(main_frame)
+        header_frame.pack(fill=tk.X, pady=(0, 20))
+        ttk.Label(header_frame, text="Advanced Savings Goal Tracker", style="Header.TLabel").pack(side=tk.LEFT)
+
+        # Search Bar
+        search_frame = ttk.Frame(header_frame)
+        search_frame.pack(side=tk.RIGHT)
+        ttk.Label(search_frame, text="🔍").pack(side=tk.LEFT, padx=5)
+        self.search_var = tk.StringVar()
+        self.search_var.trace("w", self.on_search)
+        ttk.Entry(search_frame, textvariable=self.search_var, width=25).pack(side=tk.LEFT)
+
+        # --- Toolbar ---
+        toolbar = ttk.Frame(main_frame)
+        toolbar.pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Button(toolbar, text="➕ New Goal", command=self.open_create_window).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(toolbar, text="💰 Update Savings", command=self.open_update_window).pack(side=tk.LEFT, padx=5)
+        ttk.Button(toolbar, text="📊 View Details", command=self.show_details).pack(side=tk.LEFT, padx=5)
+        ttk.Button(toolbar, text="🗑️ Delete", command=self.delete_goal).pack(side=tk.LEFT, padx=5)
+
+        # --- Goal List (Treeview) ---
+        columns = ("ID", "Name", "Category", "Progress", "Saved", "Target", "Status")
+        self.tree = ttk.Treeview(main_frame, columns=columns, show="headings", selectmode="browse")
+
+        self.tree.heading("ID", text="ID")
+        self.tree.heading("Name", text="Goal Name")
+        self.tree.heading("Category", text="Category")
+        self.tree.heading("Progress", text="Progress")
+        self.tree.heading("Saved", text="Saved (RM)")
+        self.tree.heading("Target", text="Target (RM)")
+        self.tree.heading("Status", text="Status")
+
+        self.tree.column("ID", width=40, anchor="center")
+        self.tree.column("Name", width=200)
+        self.tree.column("Category", width=100)
+        self.tree.column("Progress", width=150)
+        self.tree.column("Saved", width=100, anchor="e")
+        self.tree.column("Target", width=100, anchor="e")
+        self.tree.column("Status", width=100, anchor="center")
+
+        scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.tree.bind("<Double-1>", lambda e: self.show_details())
+
+    def refresh_goal_list(self, goals_to_show=None):
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        goals = goals_to_show if goals_to_show is not None else self.tracker.goals
+        goals = sorted(goals, key=lambda x: (-x['priority'], x['id']))
+
+        for goal in goals:
+            progress_pct = (goal['current_savings'] / goal['target_amount']) * 100
+            blocks = int(progress_pct / 10)
+            visual_bar = "█" * blocks + "░" * (10 - blocks)
+            progress_text = f"{visual_bar} {progress_pct:.1f}%"
+
+            status = "✅ Done" if goal['completed'] else "🔄 Active"
+            if not goal['completed'] and goal['target_date']:
+                if self.tracker.get_days_remaining(goal['target_date']) < 0:
+                    status = "⚠️ Overdue"
+
+            self.tree.insert("", tk.END, values=(
+                goal['id'], goal['name'], goal['category'], progress_text,
+                f"{goal['current_savings']:,.2f}", f"{goal['target_amount']:,.2f}", status
+            ))
+
+    def on_search(self, *args):
+        query = self.search_var.get().lower()
+        if not query:
+            self.refresh_goal_list()
+            return
+        filtered = [g for g in self.tracker.goals if query in g['name'].lower() or query in g['category'].lower()]
+        self.refresh_goal_list(filtered)
+
+    def get_selected_goal(self):
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning("Warning", "Please select a goal first.")
+            return None
+        goal_id = self.tree.item(selected[0])['values'][0]
+        return next((g for g in self.tracker.goals if g['id'] == goal_id), None)
+
+    def open_create_window(self):
+        CreateGoalWindow(self.root, self.tracker, self.refresh_goal_list)
+
+    def open_update_window(self):
+        goal = self.get_selected_goal()
+        if goal:
+            if goal['completed']:
+                messagebox.showinfo("Info", "This goal is already completed!")
+                return
+            UpdateSavingsWindow(self.root, self.tracker, goal, self.refresh_goal_list)
+
+    def show_details(self):
+        goal = self.get_selected_goal()
+        if not goal: return
+        details = f"🎯 Goal: {goal['name']}\n📂 Category: {goal['category']}\n⭐ Priority: {goal['priority']}/5\n"
+        details += "-" * 30 + "\n"
+        details += f"💰 Saved: RM {goal['current_savings']:,.2f}\n🏁 Target: RM {goal['target_amount']:,.2f}\n"
+        details += f"💸 Monthly Contribution: RM {goal['monthly_contribution']:,.2f}\n"
+        if goal['target_date']:
+            days = self.tracker.get_days_remaining(goal['target_date'])
+            details += f"📅 Target Date: {goal['target_date']} ({days} days left)\n"
+        est = self.tracker.calculate_estimated_completion(goal)
+        details += f"⏳ Est. Completion: {est}\n🕒 Last Updated: {goal.get('last_updated', 'N/A')}"
+        messagebox.showinfo(f"Details: {goal['name']}", details)
+
+    def delete_goal(self):
+        goal = self.get_selected_goal()
+        if not goal: return
+        confirm = messagebox.askyesno("Confirm Delete",
+                                      f"Are you sure you want to delete '{goal['name']}'?\nThis cannot be undone.")
+        if confirm:
+            self.tracker.goals.remove(goal)
+            self.tracker.save_goals()
+            self.refresh_goal_list()
+            messagebox.showinfo("Success", "Goal deleted successfully.")
+
+
+# ==========================================
+# PART 3: POPUP WINDOWS (Inheritance Implemented)
+# ==========================================
+
+class BasePopup(tk.Toplevel):
+    """
+    Parent class for all popup windows.
+    Handles common setup like title, geometry, and frame creation.
+    """
+
+    def __init__(self, parent, title, geometry="400x500"):
+        super().__init__(parent)  # Call parent (tk.Toplevel) constructor
+        self.title(title)
+        self.geometry(geometry)
+        self.grab_set()  # Make modal
+
+        # Common padding frame
+        self.main_frame = ttk.Frame(self, padding="20")
+        self.main_frame.pack(fill=tk.BOTH, expand=True)
+
+
+class CreateGoalWindow(BasePopup):
+    """
+    Child class for Creating Goals.
+    Inherits window setup from BasePopup.
+    """
+
+    def __init__(self, parent, tracker, callback):
+        # Initialize BasePopup (Parent)
+        super().__init__(parent, "Create New Goal", "400x500")
+
+        self.tracker = tracker
+        self.callback = callback
+        self.create_widgets()
+
+    def create_widgets(self):
+        # Use self.main_frame from parent class
+        self.create_entry(self.main_frame, "Goal Name:", "name")
+        self.create_entry(self.main_frame, "Target Amount (RM):", "target")
+        self.create_entry(self.main_frame, "Current Savings (RM):", "current", default="0")
+        self.create_entry(self.main_frame, "Target Date (YYYY-MM-DD) [Optional]:", "date")
+        self.create_entry(self.main_frame, "Monthly Contribution (RM):", "monthly")
+
+        ttk.Label(self.main_frame, text="Priority (1-5):").pack(anchor=tk.W, pady=(10, 0))
+        self.priority_var = tk.StringVar(value="3")
+        ttk.Spinbox(self.main_frame, from_=1, to=5, textvariable=self.priority_var).pack(fill=tk.X)
+
+        ttk.Label(self.main_frame, text="Category:").pack(anchor=tk.W, pady=(10, 0))
+        categories = ["Travel", "Education", "Shopping", "Emergency", "Investment", "Other"]
+        self.cat_var = tk.StringVar(value="Other")
+        ttk.Combobox(self.main_frame, values=categories, textvariable=self.cat_var, state="readonly").pack(fill=tk.X)
+
+        ttk.Button(self.main_frame, text="Create Goal", command=self.submit).pack(pady=20, fill=tk.X)
+
+    def create_entry(self, parent, label, var_name, default=""):
+        ttk.Label(parent, text=label).pack(anchor=tk.W, pady=(10, 0))
+        entry = ttk.Entry(parent)
+        entry.insert(0, default)
+        entry.pack(fill=tk.X)
+        setattr(self, f"{var_name}_entry", entry)
+
+    def submit(self):
+        try:
+            name = self.name_entry.get().strip()
+            if not name: raise ValueError("Goal name is required.")
+            target = self.tracker.validate_amount(self.target_entry.get())
+            current = self.tracker.validate_amount(self.current_entry.get(), allow_zero=True)
+            monthly = self.tracker.validate_amount(self.monthly_entry.get(), allow_zero=True)
+            date_str = self.tracker.validate_date(self.date_entry.get())
+
+            if current > target:
+                raise ValueError("Current savings cannot exceed target amount.")
+
+            new_goal = {
+                'id': max([g['id'] for g in self.tracker.goals], default=0) + 1,
+                'name': name,
+                'target_amount': target,
+                'current_savings': current,
+                'target_date': date_str,
+                'monthly_contribution': monthly,
+                'priority': int(self.priority_var.get()),
+                'category': self.cat_var.get(),
+                'created_date': datetime.now().strftime("%Y-%m-%d"),
+                'completed': False,
+                'last_updated': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+
+            if current >= target:
+                new_goal['completed'] = True
+                new_goal['completed_date'] = datetime.now().strftime("%Y-%m-%d")
+
+            self.tracker.goals.append(new_goal)
+            self.tracker.save_goals()
+            messagebox.showinfo("Success", f"Goal '{name}' created!")
+            self.callback()
+            self.destroy()  # Inherited from tk.Toplevel (grandparent)
+
+        except ValueError as e:
+            messagebox.showerror("Validation Error", str(e))
+
+
+class UpdateSavingsWindow(BasePopup):
+    """
+    Child class for Updating Goals.
+    Inherits window setup from BasePopup.
+    """
+
+    def __init__(self, parent, tracker, goal, callback):
+        # Initialize BasePopup (Parent)
+        super().__init__(parent, f"Update: {goal['name']}", "400x450")
+
+        self.tracker = tracker
+        self.goal = goal
+        self.callback = callback
+        self.create_widgets()
+
+    def create_widgets(self):
+        # Use self.main_frame from parent class
+        ttk.Label(self.main_frame, text=f"Update Savings for {self.goal['name']}", font=('Segoe UI', 12, 'bold')).pack(
+            pady=10)
+
+        info_frame = ttk.LabelFrame(self.main_frame, text="Current Status", padding=10)
+        info_frame.pack(fill=tk.X, pady=10)
+        ttk.Label(info_frame, text=f"Saved: RM {self.goal['current_savings']:,.2f}").pack(anchor=tk.W)
+        ttk.Label(info_frame, text=f"Target: RM {self.goal['target_amount']:,.2f}").pack(anchor=tk.W)
+
+        btn_frame = ttk.Frame(self.main_frame)
+        btn_frame.pack(fill=tk.X, pady=10)
+        ttk.Button(btn_frame, text="+ RM 100", command=lambda: self.add_amount(100)).pack(side=tk.LEFT, expand=True,
+                                                                                          padx=2)
+        ttk.Button(btn_frame, text="+ RM 500", command=lambda: self.add_amount(500)).pack(side=tk.LEFT, expand=True,
+                                                                                          padx=2)
+        if self.goal['monthly_contribution'] > 0:
+            ttk.Button(btn_frame, text=f"+ Month (RM{self.goal['monthly_contribution']})",
+                       command=lambda: self.add_amount(self.goal['monthly_contribution'])).pack(side=tk.LEFT,
+                                                                                                expand=True, padx=2)
+
+        ttk.Label(self.main_frame, text="Add Custom Amount (RM):").pack(anchor=tk.W, pady=(10, 0))
+        self.amount_entry = ttk.Entry(self.main_frame)
+        self.amount_entry.pack(fill=tk.X)
+        ttk.Button(self.main_frame, text="Add Amount", command=self.add_custom).pack(pady=5, fill=tk.X)
+
+        ttk.Separator(self.main_frame, orient='horizontal').pack(fill='x', pady=15)
+
+        ttk.Label(self.main_frame, text="Or Set New Total (RM):").pack(anchor=tk.W)
+        self.total_entry = ttk.Entry(self.main_frame)
+        self.total_entry.pack(fill=tk.X)
+        ttk.Button(self.main_frame, text="Set Total", command=self.set_total).pack(pady=5, fill=tk.X)
+
+    def add_amount(self, amount):
+        new_total = self.goal['current_savings'] + amount
+        self.save_update(new_total)
+
+    def add_custom(self):
+        try:
+            amt = self.tracker.validate_amount(self.amount_entry.get())
+            self.add_amount(amt)
+        except ValueError as e:
+            messagebox.showerror("Error", str(e))
+
+    def set_total(self):
+        try:
+            total = self.tracker.validate_amount(self.total_entry.get(), allow_zero=True)
+            if total < self.goal['current_savings']:
+                if not messagebox.askyesno("Confirm", "New amount is lower than current savings. Continue?"):
+                    return
+            self.save_update(total)
+        except ValueError as e:
+            messagebox.showerror("Error", str(e))
+
+    def save_update(self, new_amount):
+        self.goal['current_savings'] = new_amount
+        self.goal['last_updated'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        if new_amount >= self.goal['target_amount']:
+            self.goal['completed'] = True
+            self.goal['completed_date'] = datetime.now().strftime("%Y-%m-%d")
+            messagebox.showinfo("Congratulations!", f"🎉 You have reached your goal for {self.goal['name']}!")
+
+        self.tracker.save_goals()
+        self.callback()
+        self.destroy()
+
+#Douglas
+class Saving:
+    tax_rate = 0.0
+    epf_rate = 0.0
+
+    def __init__(self,year,monthly,income_monthly,insurance,rate_t,rate_e,tax,epf,saving_month):
+        self.year = year
+        self.monthly = monthly
+        self._income_monthly = float(income_monthly)
+        self.insurance = float(insurance)
+        self.rate_t = float(rate_t)
+        self.rate_e = float(rate_e)
+        self.tax = float(tax)
+        self.epf = float(epf)
+        self.saving_month = float(saving_month)
+
+    #Encapsulation, use for protect income_monthly not get change
+    @property
+    def income_monthly(self):
+        return self._income_monthly
+
+    #ask to use property
+    @income_monthly.setter
+    def income_monthly(self,value):
+        if value < 0:
+            raise ValueError("Income cannot be negative")
+        self._income_monthly = value
+
+    #checking tax and calculate them
+    def calculate(self):
+        def epf_month(e):
+            if e > 50000:
+                epf = self.income_monthly*0.1
+            elif e > 30000:
+                epf = self.income_monthly*0.08
+            elif e > 10000:
+                epf = self.income_monthly*0.06
+            else:
+                epf = self.income_monthly*0.05
+            return epf
+
+        def tax_month(e):
+            if e >= 50000:
+                tax = self.income_monthly*0.45
+            elif e >= 30000:
+                tax = self.income_monthly*0.30
+            elif e >= 10000:
+                tax = self.income_monthly*0.20
+            else:
+                tax = self.income_monthly*0.1
+            return tax
+
+        tax_monthly = float(tax_month(self.income_monthly))
+        epf_monthly = float(epf_month(self.income_monthly))
+        saving_monthly = float(self.income_monthly - tax_monthly - epf_monthly)
+
+        if self.income_monthly > 0:
+            tax_rate = tax_monthly / self.income_monthly * 100
+            epf_rate = epf_monthly / self.income_monthly * 100
+        else:
+            self.income_monthly = 0
+            saving_monthly = 0.0
+            tax_monthly = 0.0
+            epf_monthly = 0.0
+            tax_rate = 0
+            epf_rate = 0
+
+        self.tax = round(tax_monthly,2)
+        self.epf = round(epf_monthly,2)
+        self.saving_month = round(saving_monthly,2)
+        self.rate_t = round(tax_rate,2)
+        self.rate_e = round(epf_rate,2)
+
+    def __str__(self):
+        return (f"\n-------------------------\n"
+                f"Year: {self.year}\n"
+                f"Monthly: {self.monthly}\n"
+                f"-------------------------\n"
+                f"Income: RM{self.income_monthly}\n"
+                f"Tax({self.rate_t})%: RM{self.tax}\n"
+                f"EPF({self.rate_e})%: RM{self.epf}\n"
+                f"Saving{self.monthly}: RM{self.saving_month}")
+
+#class saving at main(Have Insurance)
+class Insurance(Saving):
+    def __init__(self,year,monthly,income_monthly,insurance,rate_t,rate_e,tax,epf,saving_month):
+        super().__init__(year,monthly,income_monthly,insurance,rate_t,rate_e,tax,epf,saving_month)
+
+    @property
+    def insurance(self):
+        return self._insurance
+
+    @insurance.setter
+    def insurance(self,value):
+        if value < 0:
+            raise ValueError("Insurance cannot be negative")
+        self._insurance = value
+
+    def calculate(self):
+        def epf_month(e):
+            if e >= 50000:
+                epf = self.income_monthly * 0.1
+            elif e >= 30000:
+                epf = self.income_monthly * 0.08
+            elif e >= 10000:
+                epf = self.income_monthly * 0.06
+            else:
+                epf = self.income_monthly * 0.05
+            return epf
+
+        def tax_month(e):
+            if e > 50000:
+                tax = self.income_monthly * 0.45
+            elif e > 30000:
+                tax = self.income_monthly * 0.3
+            elif e > 10000:
+                tax = self.income_monthly * 0.2
+            else:
+                tax = self.income_monthly * 0.1
+            return tax
+
+        tax_monthly = float(tax_month(self.income_monthly))
+        epf_monthly = float(epf_month(self.income_monthly))
+        saving_monthly = float(self.income_monthly - tax_monthly - epf_monthly - self.insurance)
+
+
+        if self.income_monthly > 0:
+            tax_rate = tax_monthly / self.income_monthly * 100
+            epf_rate = epf_monthly / self.income_monthly * 100
+        else: #if user enter income equal 0, change all context equal to 0
+            self.income_monthly = 0
+            saving_monthly = 0.0
+            tax_monthly = 0.0
+            epf_monthly = 0.0
+            tax_rate = 0
+            epf_rate = 0
+
+        self.tax = round(tax_monthly, 2)
+        self.epf = round(epf_monthly, 2)
+        self.saving_month = round(saving_monthly, 2)
+        self.rate_t = round(tax_rate,2)
+        self.rate_e = round(epf_rate,2)
+
+    def __str__(self):
+        return (f"\n-------------------------\n"
+                f"Year: {self.year}\n"
+                f"Monthly: {self.monthly}\n"
+                f"-------------------------\n"
+                f"Income: RM{self.income_monthly:.2f}\n"
+                f"Tax({self.rate_t})%: RM{self.tax}\n"
+                f"EPF({self.rate_e})%: RM{self.epf}\n"
+                f"Insurance: RM{self.insurance:.2f}\n"
+                f"Saving{self.monthly}: RM{self.saving_month}") #return calculate result
+
+def clock(label, root):
+    def update():
+        label.config(text=datetime.now().strftime("Date: %d-%m-%Y\nTime: %H:%M:%S"))
+        root.after(1000, update)#after 1 second renew until i run finish
+    update()
+
+#function of close window
+def exit_now(root):
+    root.destroy()
+
+#connect between main function and show function,check what user choose
+def confirm(choice):
+    show(choice)
+
+#checking user choose and run the user choose function become user input
+def show(choice):
+    if choice.get() == 1:
+        input_income()
+    elif choice.get() == 2:
+        check_income()
+    elif choice.get() == 3:
+        change_income()
+    elif choice.get() == 4:
+        calculate_tax()
+    elif choice.get() == 5:
+        write_command()
+    elif choice.get() == 6:
+        check_command()
+
+#loading screen function
+def loading_screen():
+    splash = tk.Toplevel()
+    splash.title("System Loading")
+    splash.geometry("3000x2000")
+    splash.config(bg="black")
+    splash.attributes("-topmost",True)
+
+    loading_label = tk.Label(splash, text="System Loading",font=("Arial",20),bg="black",fg="white")
+    loading_label.pack(pady=10)
+
+    progress = ttk.Progressbar(splash,orient="horizontal",length=350,mode="determinate")
+    progress.pack(pady=10)
+
+    def loading():
+        for i in range(0,100,5):
+            progress["value"] = i
+            splash.update_idletasks()
+            splash.after(100)#wait 0.1 second
+        splash.destroy()
+    splash.after(300,loading)#wait 0.3 second to run again loading function
+
+#main function,use for give user choose the small system function
+def main_menu(parent):
+    global root4,time_label # give window and time_table to global variable,for another function use it
+
+#in main function I use label to create the word of menu,
+# use the frame to create the new small screen in window screen
+# use RadioButton to give user choose and use IntVar to collect what the user choose number of RadioButton
+# use Button to give user to confirm or exit and connect the command=lambda: (function)
+
+    loading_screen()
+    root4 = tk.Toplevel(parent)
+    root4.title("Clock Example")
+    root4.geometry("3000x2000")
+    root4.config(bg="#34495E")
+
+    time_label = tk.Label(root4, font=("Times New Roman", 28), fg="white",bg="#34495E",anchor="w", justify="left") #main menu title
+    time_label.pack(fill="x",padx=0, pady=0)
+    clock(time_label, root4)
+
+    context_title = tk.Label(root4, text="Welcome To Simple Tax Estimator",font=("Times New Roman",28), fg="white",bg="#34495E")
+    context_title.pack(padx=10, pady=10)
+
+    center_frame = tk.Frame(root4, bg="#D0E6A5",bd=3,relief="ridge")
+    center_frame.place(relx=0.5,rely=0.45,anchor="center",width=600,height=300)
+
+    main_frame = tk.Frame(center_frame,bg="#D0E6A5")
+    main_frame.pack(pady=10)
+
+    left_income_frame = tk.Frame(main_frame, bg="#D0E6A5")
+    left_income_frame.pack(side="left",pady=5)
+
+    right_frame = tk.Frame(main_frame, bg="#D0E6A5")
+    right_frame.pack(side="left", padx=10)
+
+    choice_var = tk.IntVar()
+
+    choice_income = tk.Radiobutton(left_income_frame,text="Input Income",variable=choice_var,value=1,fg="black",bg="#D0E6A5",font=("Times New Roman",20))
+    choice_check = tk.Radiobutton(right_frame,text="Check Saving",variable=choice_var,value=2,fg="black",bg="#D0E6A5",font=("Times New Roman",20))
+    choice_change = tk.Radiobutton(left_income_frame,text="Change Income",variable=choice_var,value=3,fg="black",bg="#D0E6A5",font=("Times New Roman",20))
+    choice_calculate = tk.Radiobutton(right_frame,text="Calculate Tax",variable=choice_var,value=4,fg="black",bg="#D0E6A5",font=("Times New Roman",20))
+    choice_write = tk.Radiobutton(left_income_frame,text="Write Command",variable=choice_var,value=5,fg="black",bg="#D0E6A5",font=("Times New Roman",20))
+    choice_checking = tk.Radiobutton(right_frame,text="Check Command",variable=choice_var,value=6,fg="black",bg="#D0E6A5",font=("Times New Roman",20))
+
+    choice_income.pack(anchor="w")
+    choice_check.pack(anchor="w")
+    choice_change.pack(anchor="w")
+    choice_calculate.pack(anchor="w")
+    choice_write.pack(anchor="w")
+    choice_checking.pack(anchor="w")
+
+    btn_confirm = tk.Button(center_frame,text="Confirm",bg="#1ABC9C",fg="white",font=("Times New Roman",20),command=lambda: confirm(choice_var))
+    btn_confirm.pack(pady=10)
+
+def logic_check_income(income, insurance, income_root, income_question):
+    global i, Year #global variable of i and Year
+
+#in logic_check_income function,I use strip() function to delete the space become income.get() and insurance.get()
+#And I use try except to check income and insurance is number or alphabet,if alphabet code have run ValueError
+#And I use if else to checking income and insurance have space,alphabet or negative or not
+#if not any error,i(month)will plus 1 to connect month next index of monthly,until i plus 12 time,2025(year) will plus 1
+
+    in_come = income.get()[3:].strip()
+    in_sur = insurance.get()[3:].strip()
+
+    if in_come == "":
+        messagebox.showinfo("Error", "Income can't be empty")
+        return
+
+    elif in_sur == "":
+        messagebox.showinfo("Error", "Insurance can't be empty")
+        return
+
+    elif float(in_come) == 0.0:
+        messagebox.showinfo("Exit", "User Enter 0 , Exit Now")
+        return
+
+    try:
+        in_come = float(in_come)
+        in_sur = float(in_sur)
+    except ValueError:
+        messagebox.showerror("Error", "Please enter number values of insurance and income")
+        return
+    else:
+        if float(in_come) < 0 or float(in_sur) < 0:
+            if float(in_come) <= 0:
+                messagebox.showinfo("Error", "Income can't be zero or negative")
+                return
+            else:
+                messagebox.showinfo("Error", "Insurance can't be negative")
+            return
+
+        elif float(in_come) <= float(in_sur):
+            messagebox.showinfo("Error", "Insurance cannot more or equal than income")
+            return
+        else:
+            in_come = float(in_come)
+            in_sur = float(in_sur)
+
+            tax = 0.0
+            epf = 0.0
+            saving_month = 0.0
+            rate_tax = 0.0
+            rate_epf = 0.0
+            insurance = 0.0
+
+            current_month = Monthly[i]
+            if in_sur != 0:
+                obj = Insurance(Year, current_month, in_come, in_sur,rate_tax,rate_epf,tax,epf,saving_month)
+                obj.calculate()
+                saving.append(obj)
+            else:
+                obj = Saving(Year, current_month, in_come,insurance,rate_tax,rate_epf,tax,epf,saving_month)
+                obj.calculate()
+                saving.append(obj)
+
+            messagebox.showinfo("Success", "✅Input Income has been Save Successfully")
+
+        i += 1
+
+        if i < 12:
+            income_root.destroy()
+            input_income()
+        else:
+            messagebox.showinfo("Done", "All 12 months completed!")
+            Year += 1
+            i = 0
+
+        next_month = Monthly[i]
+        income_question.config(text=f"Please Enter Your Income in {next_month}")
+        income.delete(0, tk.END)
+        insurance.delete(0, tk.END)
+
+def input_income():
+    global i, Year,root4,time_label #global variable of i Year window and time_label
+
+#in this function same like main function,I use label to create word
+# and I use Entry to give user input their income and insurance
+# and entry context start with "RM: ", and use check function let user cannot delete "RM: "
+# and Button to connect to input_checking function
+
+    month = Monthly[i]
+
+    income_root = tk.Toplevel()
+    income_root.title("Input Income")
+    income_root.geometry("3000x2000")
+    income_root.configure(bg="#E6E6FA")
+
+    time_label_income = tk.Label(income_root, font=("Times New Roman", 24), fg="black", bg="#E6E6FA", anchor="w", justify="left")
+    time_label_income.pack(fill="x", padx=0, pady=0)
+
+    clock(time_label_income,income_root)
+
+    title_input = tk.Label(income_root, text="Input Income System", font=("Times New Roman", 24, "bold"), bg="#E6E6FA",fg="black")
+    title_input.pack(pady=10)
+
+    frame_input = tk.Frame(income_root, bg="#E6E6FA")
+    frame_input.pack()
+
+    income_question = tk.Label(frame_input, text=f"Please Enter Your Income in RM of {month}: ", bg="#E6E6FA",fg="black",font=("Times New Roman", 16, "bold"))
+    income_question.grid(row=0, column=0)
+
+    income = tk.Entry(frame_input, bg="white",font=("Times New Roman", 15, "bold"))
+    income.grid(row=0, column=1)
+    income.insert(0, "RM: ")
+
+    insurance_question = tk.Label(frame_input, text="Please Enter Your insurance in RM(if no,Enter 0): ",bg="#E6E6FA", fg="black",font=("Times New Roman", 16, "bold"))
+    insurance_question.grid(row=1, column=0)
+
+    insurance = tk.Entry(frame_input, bg="white",font=("Times New Roman", 15, "bold"))
+    insurance.grid(row=1, column=1)
+    insurance.insert(0, "RM: ")
+
+    def check(event):
+        if not income.get().startswith("RM: "):
+            income.delete(0,tk.END)
+            income.insert(0, "RM: ")
+        elif not insurance.get().startswith("RM: "):
+            insurance.delete(0,tk.END)
+            insurance.insert(0, "RM: ")
+
+    income.bind("<KeyRelease>", check)
+    insurance.bind("<KeyRelease>", check)
+
+    btn_income = tk.Button(frame_input, text="Confirm", bg="#E6E6FA",fg="black",font=("Times New Roman",16),command=lambda: logic_check_income(income, insurance, income_root, income_question))
+    btn_income.grid(row=4, columnspan=2)
+
+    btn_exit = tk.Button(frame_input, text="Exit",bg="#E6E6FA",fg="black",font=("Times New Roman",16),command=lambda: exit_now(income_root))
+    btn_exit.grid(row=5, column=1)
+
+def checking_check(var,year_entry,month_entry,root):
+    choice = var.get()
+    year = year_entry.get()[6:].strip()
+    month = month_entry.get()[7:].strip().capitalize()
+
+#in this function,I also use same to income checking
+#I use try except to check the year is alphabet or not and use month.isdigit() to check month is alphabet or number
+#And use for to looping check year and month have in saving list or not
+#I use strip() to delete the space after I use [6:] cut list and use capitalize to change the bigger of first alphabet
+#example: january -> January
+
+    if year == "":
+        messagebox.showinfo("Error", "Year cannot be empty")
+        root.destroy()
+        return
+
+    try:
+        year = int(year.strip())
+    except ValueError:
+        messagebox.showerror("Error", "year must be an integer number")
+        root.destroy()
+        return
+    else:
+        if choice == "":
+            messagebox.showinfo("Error","Please choose a choice")
+            root.destroy()
+            return
+        elif month == "" or month.isdigit():
+            messagebox.showinfo("Error","Month cannot be empty or number")
+            root.destroy()
+            return
+        elif month.lower() != "n" and month not in Monthly:
+            messagebox.showinfo("Error", "Month invalid")
+            root.destroy()
+            return
+
+        found = False
+        text = ""
+        month = month.capitalize()
+        year = int(year)
+
+        check_list = []
+
+        check_list = []
+        if choice == "A":
+            for check in saving:
+                if month == check.monthly and year == check.year:
+                    check_list.append(check)
+                    found = True
+        elif choice == "B":
+            for check in saving:
+                if year == check.year:
+                    check_list.append(check)
+                    found = True
+        elif choice == "C":
+            for check in saving:
+                if month == check.monthly:
+                    check_list.append(check)
+                    found = True
+        elif choice == "D":
+            for check in saving:
+                check_list.append(check)
+                found = True
+
+        if not found:
+            messagebox.showinfo("Error","Not Found")
+            return
+        else:
+            table_check = tk.Toplevel()
+            table_check.title("Table Check")
+            table_check.geometry("800x400")
+            table_check.configure(bg="#34495E")
+
+            title = tk.Label(table_check, text="Savin Record Table", font=("Times New Roman", 20, "bold"), bg="#34495E",
+                             fg="white")
+            title.pack(pady=10)
+
+            columns = ("Year", "Month", "Income(RM)","Insurance(RM)","Tax(RM)", "EPF(RM)","Saving(RM)")
+            table = ttk.Treeview(table_check, columns=columns, show="headings", height=15)
+
+            for col in columns:
+                table.heading(col, text=col)
+                table.column(col, anchor="center", width=150)
+
+            table.pack(expand=True, fill="both", pady=10)
+
+            for check in check_list:
+                table.insert("", "end", values=(check.year,check.monthly,check.income_monthly,check.insurance,check.tax,check.epf,check.saving_month))
+        root.destroy()
+
+def check_income():
+
+# in this function same like main function,I use label to create word
+# and use RadioButton to let user choose what type they want to check
+# and I use Entry start with "Year: " and "Month: " to asking user want to input what context
+# and use Button to connect function of checking_check function or exit
+
+    check_root = tk.Toplevel()
+    check_root.title("Saving Checking")
+    check_root.geometry("3000x2000")
+    check_root.configure(bg="#87CEFA")
+
+    time_label_check = tk.Label(check_root, font=("Times New Roman", 28), fg="white", bg="#87CEFA", anchor="w", justify="left")
+    time_label_check.pack(fill="x", padx=0, pady=0)
+
+    clock(time_label_check,check_root)
+
+    title_check = tk.Label(check_root,text="Checking Income System",bg="#87CEFA",fg="white",font=("Times New Roman",28,"bold"))
+    title_check.pack(pady=10)
+
+    frame_check = tk.Frame(check_root,bg="#87CEFA")
+    frame_check.pack(pady=10)
+
+    radio_frame = tk.Frame(frame_check,bg="#87CEFA")
+    radio_frame.grid(row=2, column=0, columnspan=2, pady=10)
+    var = tk.StringVar()
+
+    check_single_month_question1 = tk.Radiobutton(radio_frame,text="Check Single Month",variable=var,value="A",bg="black",fg="#87CEFA",font=("Times New Roman",20,"bold"))
+    check_single_month_question2 = tk.Radiobutton(radio_frame,text="Check Single Year",variable=var,value="B",bg="black",fg="#87CEFA",font=("Times New Roman",20,"bold"))
+    check_single_month_question3 = tk.Radiobutton(radio_frame,text="Check All Month",variable=var,value="C",bg="black",fg="#87CEFA",font=("Times New Roman",20,"bold"))
+    check_single_month_question4 = tk.Radiobutton(radio_frame,text="Check All",variable=var,value="D",bg="black",fg="#87CEFA",font=("Times New Roman",20,"bold"))
+
+    monthly_question = tk.Label(frame_check,text="Enter Monthly(Alphabet) you want to check(if no, Enter n): ",bg="#87CEFA",fg="white",font=("Times New Roman", 20, "bold"))
+    monthly_question.grid(row=0,column=0,sticky="w")
+
+    monthly_check = tk.Entry(frame_check,bg="white",font=("Times New Roman", 15, "bold"))
+    monthly_check.grid(row=0,column=1)
+    monthly_check.insert(0,"Month: ")
+
+    year_question = tk.Label(frame_check,text="Enter Year(Number) you want to check(if no, Enter 0): ",bg="#87CEFA",fg="white",font=("Times New Roman", 20, "bold"))
+    year_question.grid(row=1,column=0,sticky="w")
+
+    year_check = tk.Entry(frame_check,bg="white",font=("Times New Roman", 15, "bold"))
+    year_check.grid(row=1,column=1)
+    year_check.insert(0,"Year: ")
+
+    check_single_month_question1.pack(side="left", padx=10)
+    check_single_month_question2.pack(side="left", padx=10)
+    check_single_month_question3.pack(side="left", padx=10)
+    check_single_month_question4.pack(side="left", padx=10)
+
+    def check(event):
+        if not monthly_check.get().startswith("Month: "):
+            monthly_check.delete(0, tk.END)
+            monthly_check.insert(0, "Month: ")
+        elif not year_check.get().startswith("Year: "):
+            year_check.delete(0, tk.END)
+            year_check.insert(0, "Year: ")
+    monthly_check.bind("<KeyRelease>", check)
+    year_check.bind("<KeyRelease>", check)
+
+    btn_checking = tk.Button(frame_check,text="Confirm",bg="#87CEFA",fg="white",font=("Times New Roman",20),command=lambda: checking_check(var,year_check,monthly_check,check_root))
+    btn_checking.grid(row=3,columnspan=2,pady=10)
+    btn_exit = tk.Button(frame_check,text="Exit",bg="#87CEFA",fg="white",font=("Times New Roman",20),command=lambda: exit_now(check_root))
+    btn_exit.grid(row=3,column=1)
+
+def change_checking(year,month,root,income):
+
+#In this function, I use isalpha() and isdigit() to checking that is alphabet or not
+# and use if else function to checking they have any space or invalid input
+# and use try except to check change income is number or not and connect the Encapsulation protect and checking the year is number or alphabet
+
+    found = False
+    month = month.strip().capitalize()
+
+    if year == "":
+        messagebox.showinfo("Error", "Year cannot be empty or negative number")
+        root.destroy()
+        return
+    elif year.isalpha():
+        messagebox.showinfo("Error","Year cannot be alphabet")
+        root.destroy()
+        return
+    try:
+        year = int(year)
+    except ValueError:
+        messagebox.showinfo("Error","Year must be an integer")
+        root.destroy()
+        return
+    else:
+        if year < 0:
+            messagebox.showinfo("Error","Year cannot be less than 0")
+            root.destroy()
+            return
+        elif month.isdigit():
+            messagebox.showinfo("Error","Month cannot be a number")
+            root.destroy()
+            return
+        elif month == "":
+            messagebox.showinfo("Error","Month cannot be empty")
+            root.destroy()
+            return
+        try:
+            new_income = float(income)
+            if new_income < 0:
+                raise ValueError("Income cannot be negative")
+        except ValueError as e:
+            messagebox.showerror("Error", str(e))
+            root.destroy()
+            return
+
+        for c in saving:
+            if year == c.year and month == c.monthly:
+                try:
+                    c.income_monthly = new_income
+                    found = True
+                except ValueError as e:
+                    messagebox.showerror("Error", str(e))
+                    root.destroy()
+                    return
+                break
+
+        if not found:
+            messagebox.showinfo("Error","Monthly or Year can't not found")
+            root.destroy()
+            return
+        else:
+            messagebox.showinfo("Success","✅Your Saving is change already")
+            root.destroy()
+
+def delete_income(year,month,root):
+    found = False
+    month = month.strip().capitalize()
+
+    if year == "":
+        messagebox.showinfo("Error", "Year cannot be empty or negative number")
+        root.destroy()
+        return
+    elif year.isalpha():
+        messagebox.showinfo("Error", "Year cannot be alphabet")
+        root.destroy()
+        return
+    try:
+        year = int(year)
+    except ValueError:
+        messagebox.showinfo("Error", "Year must be an integer")
+        root.destroy()
+        return
+    else:
+        if year < 0:
+            messagebox.showinfo("Error","Year cannot be less than 0")
+            root.destroy()
+            return
+        elif month.isdigit():
+            messagebox.showinfo("Error","Month cannot be a number")
+            root.destroy()
+            return
+        elif month == "":
+            messagebox.showinfo("Error","Month cannot be empty")
+            root.destroy()
+            return
+
+        for delete in saving:
+            if year == delete.year and month == delete.monthly:
+                saving.remove(delete)
+                found = True
+
+        if not found:
+            messagebox.showinfo("Error","Monthly or Year can't found")
+            root.destroy()
+            return
+        else:
+            messagebox.showinfo("Success","Income Delete Already Exist")
+            root.destroy()
+
+def change_income():
+
+# in this function same like main function,I use label to create word
+# and I use Entry to give user input their change income,change year and change month
+# and entry context start with "RM: ", "Year: ", "Month: ",and use check function let user cannot delete "RM: " ,"Year: " and "Month: "
+# and Button to connect to change_checking function
+
+    change_root = tk.Toplevel()
+    change_root.title("Change Income")
+    change_root.geometry("3000x2000")
+    change_root.config(bg="#00CED1")
+
+    time_label_check = tk.Label(change_root, font=("Times New Roman", 28), fg="white", bg="#00CED1", anchor="w", justify="left")
+    time_label_check.pack(fill="x", padx=0, pady=0)
+
+    clock(time_label_check,change_root)
+
+    title_change = tk.Label(change_root,text="Change Income",font=("Times New Roman",28,"bold"),bg="#00CED1",fg="white")
+    title_change.pack(pady=10)
+
+    change_frame = tk.Frame(change_root, bg="#00CED1")
+    change_frame.pack(pady=10)
+
+    change_year = tk.Label(change_frame,text="Enter Year(Number) you want to change or delete",font=("Times New Roman",20),bg="#00CED1",fg="white")
+    change_year.grid(row=0,column=0)
+
+    change_year_answer = tk.Entry(change_frame,bg="white",font=("Times New Roman",15))
+    change_year_answer.grid(row=0,column=1)
+    change_year_answer.insert(0,"Year: ")
+
+    change_month = tk.Label(change_frame,text="Enter Month(Alphabet) you want to change or delete",font=("Times New Roman",20),bg="#00CED1",fg="white")
+    change_month.grid(row=1,column=0)
+
+    change_month_answer = tk.Entry(change_frame,bg="white",font=("Times New Roman",15))
+    change_month_answer.grid(row=1,column=1)
+    change_month_answer.insert(0,"Month: ")
+
+    change_income_question = tk.Label(change_frame,text="Enter Income You want to change",font=("Times New Roman",20),bg="#00CED1",fg="white")
+    change_income_question.grid(row=2,column=0)
+
+    change_income_answer = tk.Entry(change_frame,bg="white",font=("Times New Roman",15))
+    change_income_answer.grid(row=2,column=1)
+    change_income_answer.insert(0,"RM: ")
+
+    table_saving = []
+
+    for record in saving:
+        table_saving.append(record)
+
+    table_frame = tk.Frame(change_root, bg="#00CED1")
+    table_frame.pack(pady=10)
+
+    columns = ("Year", "Month", "Income(RM)","Insurance(RM)","Tax(RM)", "EPF(RM)","Saving(RM)")
+    table = ttk.Treeview(table_frame, columns=columns, show="headings", height=15)
+
+    for col in columns:
+        table.heading(col, text=col)
+        table.column(col, anchor="center", width=150)
+
+    table.pack(expand=True, fill="both", pady=10)
+
+    for check in table_saving:
+        table.insert("", "end", values=(check.year,check.monthly,check.income_monthly,check.insurance,check.tax,check.epf,check.saving_month))
+
+
+    def check(event):
+        if not change_income_answer.get().startswith("RM: "):
+            change_income_answer.delete(0, tk.END)
+            change_income_answer.insert(0, "RM: ")
+        elif not change_year_answer.get().startswith("Year: "):
+            change_year_answer.delete(0, tk.END)
+            change_year_answer.insert(0, "Year: ")
+        elif not change_month_answer.get().startswith("Month: "):
+            change_month_answer.delete(0, tk.END)
+            change_month_answer.insert(0, "Month: ")
+
+    change_income_answer.bind("<KeyRelease>", check)
+    change_year_answer.bind("<KeyRelease>", check)
+    change_month_answer.bind("<KeyRelease>", check)
+
+    btn_change = tk.Button(change_frame,text="Confirm",bg="#00CED1",fg="white",font=("Times New Roman",20),command=lambda: change_checking(change_year_answer.get()[6:].strip(),change_month_answer.get()[7:].strip().capitalize(),change_root,change_income_answer.get().strip()[3:]))
+    btn_change.grid(row=3,columnspan=2)
+    btn_delete = tk.Button(change_frame,text="Delete",bg="#00CED1",fg="white",font=("Times Nes Roman",20),command=lambda: delete_income(change_year_answer.get()[6:].strip(),change_month_answer.get()[7:].strip().capitalize(),change_root))
+    btn_delete.grid(row=3,column=1)
+    btn_exit = tk.Button(change_frame,text="Exit",bg="#00CED1",fg="white",font=("Times New Roman",20),command=lambda: exit_now(change_root))
+    btn_exit.grid(row=3,column=2)
+
+def calculate(income,root):
+
+#in this function,I use if else function to checking calculate income have any space,alphabet or invalid input or not
+# and use if else function to calculate the percentage of tax in income and use messagebox.showinfo to show the result to user
+# use try function to check income have ValueError or not
+    if income.strip() == "":
+        messagebox.showinfo("Error","Income cannot be empty")
+        root.destroy()
+        return
+    else:
+        try:
+            income = float(income)
+        except ValueError:
+            messagebox.showinfo("Error","Income must be a number")
+            root.destroy()
+            return
+        else:
+            if income <= 0:
+                messagebox.showinfo("Error","Income must be greater than 0")
+                root.destroy()
+                return
+            if income < 10000:
+                messagebox.showinfo("Tax",f"Income: RM{income:.2f}\nTax: RM{income*0.1:.2f}\nTax Percentage: 10%")
+                root.destroy()
+                return
+            elif income < 30000:
+                messagebox.showinfo("Tax",f"Income: RM{income:.2f}\nTax: RM{income*0.2:.2f}\nTax Percentage: 20%")
+                root.destroy()
+                return
+            elif income < 50000:
+                messagebox.showinfo("Tax",f"Income: RM{income:.2f}\nTax: RM{income*0.3:.2f}\nTax Percentage: 30%")
+                root.destroy()
+                return
+            else:
+                messagebox.showinfo("Tax",f"Income: RM{income:.2f}\nTax: RM{income*0.45:.2f}\nTax Percentage: 45%")
+                root.destroy()
+                return
+
+def calculate_tax():
+
+# same like main function use label to create word
+# and use Treeview to let user see carefully  and show all type of tax in the table tax
+# and Entry start with "Rm: " and using check function don't give user delete "RM: "
+# use Button to connect calculate function
+
+    calculate_root = tk.Toplevel()
+    calculate_root.title("Calculate Tax System")
+    calculate_root.geometry("3000x2000")
+    calculate_root.config(bg="#90EE90")
+
+    time_label_check = tk.Label(calculate_root, font=("Times New Roman", 24), fg="black", bg="#90EE90", anchor="w", justify="left")
+    time_label_check.pack(fill="x", padx=0, pady=0)
+
+    clock(time_label_check,calculate_root)
+
+    title = tk.Label(calculate_root,text="Calculate Tax System",font=("Times New Roman", 24, "bold"),bg="#90EE90",fg="black")
+    title.pack(pady=10)
+
+    style = ttk.Style()
+    style.configure("Treeview",font=("Times New Roman", 16, "bold")
+    )
+    style.configure("Treeview.Heading",font=("Times New Roman", 16, "bold")
+    )
+    tree = ttk.Treeview(calculate_root, columns=("income", "tax"), show="headings", height=5)
+    tree.heading("income", text="Income (RM)")
+    tree.heading("tax", text="Tax Rate")
+
+    tree.column("income", width=400, anchor="center")
+    tree.column("tax", width=250, anchor="center")
+
+    tree.insert("", "end", values=("< 10000", "10%"))
+    tree.insert("", "end", values=("10000 - 29999", "20%"))
+    tree.insert("", "end", values=("30000 - 49999", "30%"))
+    tree.insert("", "end", values=("> 50000", "45%"))
+    tree.pack(pady=10)
+
+    calculate_tax_frame = tk.Frame(calculate_root, bg="#90EE90")
+    calculate_tax_frame.pack(pady=10)
+
+    calculate_tax_question = tk.Label(calculate_tax_frame,text="Enter income you want to calculate",font=("Times New Roman",16),bg="#90EE90",fg="black")
+    calculate_tax_question.pack(fill="x", padx=0, pady=0)
+
+    calculate_tax_answer = tk.Entry(calculate_tax_frame,bg="white",font=("Times New Roman",15,"bold"))
+    calculate_tax_answer.pack(fill="x", padx=0, pady=0)
+    calculate_tax_answer.insert(0,"RM: ")
+
+    def check(event):
+        if not calculate_tax_answer.get().startswith("RM: "):
+            calculate_tax_answer.delete(0, tk.END)
+            calculate_tax_answer.insert(0, "RM: ")
+    calculate_tax_answer.bind("<KeyRelease>", check)
+
+    keypad = tk.Frame(calculate_root, bg="#90EE90")
+    keypad.pack(pady=10)
+
+    def press(value):
+        calculate_tax_answer.insert(tk.END, value)
+
+    def clear():
+        calculate_tax_answer.delete(0, tk.END)
+        calculate_tax_answer.insert(0, "RM: ")
+
+    buttons = [
+        ("7", 0, 0), ("8", 0, 1), ("9", 0, 2),
+        ("4", 1, 0), ("5", 1, 1), ("6", 1, 2),
+        ("1", 2, 0), ("2", 2, 1), ("3", 2, 2),
+        ("0", 3, 0), (".", 3, 1)]
+    for text, r, c in buttons:
+        tk.Button(keypad,text=text,font=("Times New Roman", 14),width=5,command=lambda t=text: press(t)).grid(row=r, column=c, padx=5, pady=5)
+
+    tk.Button(keypad, text="Clear", font=("Times New Roman", 14), width=12, command=clear).grid(row=3, column=2, padx=5, pady=5)
+
+    tk.Button(calculate_root,text="Calculate",bg="#90EE90",fg="black",font=("Times New Roman",16),command=lambda: calculate(calculate_tax_answer.get().strip()[3:], calculate_root)).pack(pady=10)
+
+    tk.Button(calculate_root,text="Exit",bg="#90EE90",fg="black",font=("Times New Roman",16),command=lambda: exit_now(calculate_root)).pack()
+
+def write_command():
+
+    command_root = tk.Toplevel()
+    command_root.title("Write Command")
+    command_root.geometry("3000x2000")
+    command_root.config(bg="#4169E1")
+
+    time_label_cmd = tk.Label(command_root,font=("Times New Roman", 18),fg="white",bg="#4169E1",anchor="w",justify="left")
+    time_label_cmd.pack(fill="x", padx=0, pady=0)
+
+    clock(time_label_cmd, command_root)
+
+    tk.Label(command_root,text="Write Command System",font=("Times New Roman", 20, "bold"),bg="#4169E1",fg="white").pack(pady=10)
+
+    frame_cmd = tk.Frame(command_root, bg="#4169E1")
+    frame_cmd.pack(pady=10, fill="both", expand=True)
+
+    tk.Label(frame_cmd,text="Enter Month:",font=("Times New Roman", 16, "bold"),bg="#4169E1",fg="white").grid(row=0, column=0, sticky="nw")
+
+    month_entry = ttk.Combobox(frame_cmd,values=Monthly,state="normal",font=("Times New Roman", 16, "bold"))
+    month_entry.set("January")
+    month_entry.grid(row=0, column=1, sticky="nw", pady=10)
+
+    tk.Label(frame_cmd,text="Enter Command:",font=("Times New Roman", 16, "bold"),bg="#4169E1",fg="white").grid(row=1, column=0, sticky="nw")
+
+    command_text = tk.Text(frame_cmd,font=("Times New Roman", 15),width=60,height=15)
+    command_text.grid(row=1, column=1, pady=10)
+
+    def save_command():
+        month = month_entry.get().strip().capitalize()
+        command_value = command_text.get("1.0", tk.END).strip()
+
+        if not month or month.isdigit():
+            messagebox.showerror("Error", "Month cannot be empty or a number")
+            return
+        if month not in Monthly:
+            messagebox.showerror("Error", "Invalid Month")
+            return
+        if not command_value:
+            messagebox.showerror("Error", "Command cannot be empty")
+            return
+
+        with open(command_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        data[month] = command_value
+
+        with open(command_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+
+        messagebox.showinfo("Success", f"Command for {month} saved!")
+        command_root.destroy()
+
+    tk.Button(frame_cmd,text="Save Command",font=("Times New Roman", 16),bg="#4169E1",fg="white",command=save_command).grid(row=2, columnspan=2, pady=10)
+
+    tk.Button(frame_cmd,text="Exit",font=("Times New Roman", 16),bg="#4169E1",fg="white",command=lambda: exit_now(command_root)).grid(row=2, column=3)
+
+def check_command():
+
+# in this function, I use if else function to check have the command or not
+# if have command, will open the file and show the content of user
+# If not have any command, show No command file found
+# use label to create the word
+
+    check_root = tk.Toplevel()
+    check_root.title("Check Command")
+    check_root.geometry("3000x2000")
+    check_root.config(bg="#F0E68C")
+
+    time_label_cmd = tk.Label(check_root, font=("Times New Roman", 18), fg="black", bg="#F0E68C", anchor="w", justify="left")
+    time_label_cmd.pack(fill="x", padx=0, pady=0)
+
+    clock(time_label_cmd,check_root)
+
+    tk.Label(check_root, text="Check Command System", font=("Times New Roman", 20, "bold"), bg="#F0E68C", fg="black").pack(pady=10)
+
+    frame_check = tk.Frame(check_root, bg="#F0E68C")
+    frame_check.pack(fill="both", expand=True, padx=10, pady=10)
+
+    text_area = scrolledtext.ScrolledText(frame_check, font=("Times New Roman", 15), width=80, height=25)
+    text_area.pack(fill="both", expand=True)
+    text_area.config(state="normal")
+
+    if os.path.exists(command_file):
+        with open(command_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not data:
+            text_area.insert(tk.END, "No commands saved yet.")
+        else:
+            for month, cmd in data.items():
+                text_area.insert(tk.END, f"{month}: {cmd}\n\n")
+    else:
+        text_area.insert(tk.END, "No command file found.")
+
+    text_area.config(state="disabled")
+    tk.Button(check_root, text="Exit", font=("Times New Roman", 16), bg="#F0E68C", fg="black", command=lambda: exit_now(check_root)).pack(pady=10)
+
+#System 1
+def main_1(root):
+    root.withdraw()
+    root1 = tk.Toplevel()
+    ExpenseTracker(root1)
+    def exit_system():
+        root1.destroy()
+        root.deiconify()
+    tk.Button(root1, text="Exit System", font=("Arial", 16), bg="red", fg="black", command=exit_system).pack(pady=20)
+
+#System 2
+def main_2(root):
+    root.withdraw()
+    root2 = tk.Toplevel(root)
+    app = BudgetPlannerApp(root2)
+
+    def exit_system():
+        root2.destroy()
+        root.deiconify()
+
+    exit_frame = ttk.Frame(root2, padding=10)
+    exit_frame.grid(row=99, column=0, sticky="ew")
+
+    ttk.Button(exit_frame, text="Return to Main Menu", command=exit_system).grid(row=0, column=0, pady=10)
+
+#Sytsem3
+def main_3(root):
+    root.withdraw()
+    root3 = tk.Toplevel()
+    SavingsTrackerApp(root3)
+
+    def exit_system():
+        root3.destroy()
+        root.deiconify()
+    tk.Button(root3, text="Exit System", font=("Times New Roman", 16), bg="red", fg="white",command=exit_system).pack(pady=10)
+
+#System4
+def main_4(root):
+    root.withdraw()
+    main_menu(root)
+    def exit_system():
+        root4.destroy()
+        root.deiconify()
+    tk.Button(root4, text="Exit System", font=("Times New Roman", 16), bg="red", fg="white", command=exit_system).pack(pady=280)
+
+def on_enter_exit(e):
+    e.widget['background'] = "#FD5E53"
+
+def on_leave_exit(e):
+    e.widget['background'] = "red"
+
+def on_enter(e):
+    e.widget['background'] = 'grey'
+
+def on_leave(e):
+    e.widget['background'] = '#FFE8F2'
+
+def add_clock(label, root):
+    def update():
+        label.config(text=datetime.now().strftime("Date: %d-%m-%Y\nTime: %H:%M:%S"))
+        root.after(1000, update)
+
+    update()
+
+def system1(root):
+    main_1(root)
+
+def system2(root):
+    main_2(root)
+
+def system3(root):
+    main_3(root)
+
+def system4(root_4):
+    main_4(root_4)
+
+def main_12():
+    root = tk.Tk()
+    root.title("Finance assistant system")
+    root.geometry("3000x2000")
+    root.configure(bg="#EAF7F2")
+
+    time_label = tk.Label(root, font=("Times New Roman", 24), fg="black", bg="#EAF7F2", anchor="w", justify="left")
+    time_label.pack(fill="x")
+    add_clock(time_label, root)
+
+    title = tk.Label(root, text="Choose the system you want", font=("Times New Roman", 36, "bold"), fg="black",
+                     bg="#EAF7F2")
+    title.pack(pady=20)
+
+    # ----------------- 科技小动画 -----------------
+    canvas = tk.Canvas(root, width=600, height=10, bg="#EAF7F2", highlightthickness=0)
+    canvas.pack(pady=10)
+    dot = canvas.create_oval(0, 0, 20, 10, fill="#00FFFF")
+    direction = 1
+
+    def animate():
+        nonlocal direction
+        canvas.move(dot, 10 * direction, 0)
+        pos = canvas.coords(dot)
+        if pos[2] >= 600 or pos[0] <= 0:
+            direction *= -1
+        root.after(50, animate)
+
+    animate()
+
+    style = ttk.Style()
+    style.configure("Accent.TButton", font=("Arial", 12), padding=10)
+
+    frame_buttons = tk.Frame(root, bg="#EAF7F2")
+    frame_buttons.pack(pady=50)
+
+    btn1 = tk.Button(frame_buttons, text="1. Expense Tracker", font=("Times New Roman", 24, "bold"), width=20,
+                     height=2, bg="#FFE8F2", fg="black", command=lambda: system1(root))
+    btn2 = tk.Button(frame_buttons, text="2. Budget Planner", font=("Times New Roman", 24, "bold"), width=20,
+                     height=2, bg="#FFE8F2", fg="black", command=lambda: system2(root))
+    btn3 = tk.Button(frame_buttons, text="3. Savings Tracker", font=("Times New Roman", 24, "bold"), width=20,
+                     height=2, bg="#FFE8F2", fg="black", command=lambda: system3(root))
+    btn4 = tk.Button(frame_buttons, text="4. Simple Tax Estimator", font=("Times New Roman", 24, "bold"), width=20,
+                     height=2, bg="#FFE8F2", fg="black", command=lambda: system4(root))
+
+    btn1.grid(row=0, column=0, padx=50, pady=30)
+    btn2.grid(row=0, column=1, padx=50, pady=30)
+    btn3.grid(row=1, column=0, padx=50, pady=30)
+    btn4.grid(row=1, column=1, padx=50, pady=30)
+
+    btn_exit = tk.Button(frame_buttons, text="System Exit", font=("Times New Roman", 20), bg="red", fg="white",
+                         command=root.destroy)
+    btn_exit.grid(row=3, columnspan=2, pady=50)
+
+    for btn in [btn1, btn2, btn3, btn4]:
+        btn.bind("<Enter>", on_enter)
+        btn.bind("<Leave>", on_leave)
+
+    btn_exit.bind("<Enter>", on_enter_exit)
+    btn_exit.bind("<Leave>", on_leave_exit)
+
+    root.mainloop()
+
+main_12()
